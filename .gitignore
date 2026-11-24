@@ -1,0 +1,21 @@
+# 课程报告与个人数据，不上传
+程序设计_*.docx
+*.docx
+rank.txt
+
+# 编译中间产物
+*.o
+*.obj
+
+# 运行 / 调试输出
+*.log
+selftest.log
+diag_audio.log
+
+# 打包副本：GitHub 上可直接 Code -> Download ZIP，不必再存一份
+*.zip
+
+# 系统文件
+Thumbs.db
+desktop.ini
+.DS_Store
