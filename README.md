@@ -5,7 +5,7 @@
 一个纯 Win32 API + GDI 自绘的 Windows 桌面小游戏：随机发 4 张扑克牌（点数 1~10），
 玩家在限时内输入四则运算表达式，使结果等于 24。
 
-![主菜单](screenshots/menu.png)
+![主菜单](doc/screenshots/menu.png)
 
 ## 功能
 
@@ -19,16 +19,18 @@
 
 | | |
 |---|---|
-| ![对局](screenshots/game.png) | ![结算](screenshots/summary.png) |
-| ![排行榜](screenshots/rank.png) | ![难度设置](screenshots/diff.png) |
+| ![对局](doc/screenshots/game.png) | ![结算](doc/screenshots/summary.png) |
+| ![排行榜](doc/screenshots/rank.png) | ![难度设置](doc/screenshots/diff.png) |
 
 ## 编译
 
-需要 MinGW-w64（已验证 g++ 10.3.0）。声音素材通过 `windres` 打包进 exe：
+需要 MinGW-w64（已验证 g++ 10.3.0）。声音素材通过 `windres` 打包进 exe。
+
+**在项目根目录下执行**（`src/计算24点游戏.rc` 里的音频路径是相对于根目录的）：
 
 ```bash
-windres 计算24点游戏.rc -O coff -o 资源.o --codepage=936
-g++ -std=c++11 -O2 -mwindows -o 计算24点游戏.exe 计算24点游戏.cpp 资源.o -lgdi32 -lwinmm
+windres src/计算24点游戏.rc -O coff -o src/资源.o --codepage=936
+g++ -std=c++11 -O2 -mwindows -o 计算24点游戏.exe src/计算24点游戏.cpp src/资源.o -lgdi32 -lwinmm
 ```
 
 - `-mwindows`：生成窗口程序，不带黑色控制台
@@ -51,19 +53,26 @@ g++ -std=c++11 -O2 -mwindows -o 计算24点游戏.exe 计算24点游戏.cpp 资�
 | `--selftest --log` | 同上，但把结果写入 `selftest.log` 而不是弹出控制台 |
 | `--shots` | 导出各界面截图（BMP），用于报告插图 |
 
-## 文件说明
+## 目录结构
 
 ```
-计算24点游戏.cpp     主程序（GBK 编码，约 2900 行）
-计算24点游戏.c++     同一份源码的提交副本
-计算24点游戏.rc      声音资源脚本（把 mp3 以 RCDATA 打包进 exe）
-计算24点游戏.exe     已编译好的可执行文件
-使用说明.txt         详细使用说明
-rank.txt             排行榜数据（程序自动读写）
-音频\                6 个 mp3 声音素材
-程序设计_XX_XX_XX.docx   课程设计报告（含框架图、流程图、测试截图）
-screenshots\         界面截图
+计算24点游戏/
+├── 计算24点游戏.exe     运行入口（必须与 音频\ 同目录）
+├── rank.txt             排行榜数据（程序自动读写）
+├── 音频\                7 个 mp3 声音素材
+├── src\                 源码
+│   ├── 计算24点游戏.cpp  主程序（GBK 编码，约 2550 行）
+│   ├── 计算24点游戏.c++  同一份源码的提交副本
+│   └── 计算24点游戏.rc   声音资源脚本（把 mp3 以 RCDATA 打包进 exe）
+├── doc\
+│   ├── 使用说明.txt       详细使用说明
+│   └── screenshots\       界面截图
+├── README.md
+└── .gitignore
 ```
+
+> 可执行文件与 `音频\`、`rank.txt` 必须位于同一目录，因为程序用
+> `GetModuleFileName` 取自身所在目录来定位素材与数据文件。
 
 ## 实现要点
 
