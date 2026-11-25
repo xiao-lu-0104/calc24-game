@@ -1,11 +1,16 @@
 /*==========================================================================
- *  计算二十四点  ——  Windows 图形界面版（纯 Win32 API + GDI，无第三方库）
+ *  计算二十四点  ——  界园终端界面版（纯 Win32 API + GDI，无第三方库）
  *
  *  编译： g++ -std=c++11 -O2 -mwindows -o 计算24点游戏.exe 计算24点游戏.cpp -lgdi32 -lwinmm
  *
  *  功能：随机发 4 张扑克牌，玩家在限时内输入四则运算表达式使其结果等于 24；
  *        三题一局，按难度与剩余时间记分，成绩存入排行榜文件。
  *        声音用 MCI 播放 音频\ 子目录下的 mp3 素材。
+ *
+ *  界面：参考《明日方舟》主界面（界园主题）重构：
+ *        深色金属背景 + 米白终端纸面卡片 + 黑字 + 品红“24”放射徽记；
+ *        左上图标、右上资源、右侧主视觉与分类卡片、左下对白与战报。
+ *        所有按钮保留原有功能，仅调整位置与视觉；Esc 可返回主菜单。
  *========================================================================*/
 
 #define WIN32_LEAN_AND_MEAN
@@ -22,8 +27,8 @@
 using std::string;
 
 /*====================== 一、全局常量 ======================*/
-static const int  DES_W        = 1040;         /* 设计画布宽（逻辑单位）     */
-static const int  DES_H        = 700;          /* 设计画布高                 */
+static const int  DES_W        = 1280;         /* 设计画布宽（逻辑单位）     */
+static const int  DES_H        = 800;          /* 设计画布高                 */
 static const int  CARD_COUNT   = 4;            /* 每题牌数                   */
 static const int  ROUND_COUNT  = 3;            /* 每局题数                   */
 static const int  MAX_NAME     = 32;           /* 姓名缓冲字节数             */
@@ -71,12 +76,14 @@ enum {
 /* 按钮 / 菜单命令编号（按钮 100+，菜单 1000+，互不冲突） */
 enum {
     ID_M_START = 100, ID_M_DIFF, ID_M_RANK, ID_M_RULES, ID_M_EXIT,
-    ID_D_0 = 110, ID_D_1 = 111, ID_D_2 = 112, ID_D_BACK = 113,
+    ID_M_NAME, ID_M_ABOUT, ID_M_SFX,
+    ID_D_0 = 110, ID_D_1 = 111, ID_D_2 = 112, ID_D_BACK = 113, ID_D_OK = 114,
     ID_R_BACK = 120,
     ID_U_BACK = 130,
     ID_N_OK = 160, ID_N_SKIP = 161, ID_N_BACK = 162,
-    ID_G_SUBMIT = 140, ID_G_NOANS = 141, ID_G_NEXT = 142, ID_G_BACK = 143,
-    ID_S_AGAIN = 150, ID_S_RANK = 151, ID_S_MENU = 152
+    ID_G_SUBMIT = 140, ID_G_NOANS = 141, ID_G_NEXT = 142, ID_G_BACK = 143, ID_G_BACK2 = 144,
+    ID_S_AGAIN = 150, ID_S_RANK = 151, ID_S_MENU = 152, ID_S_BACK = 153,
+    ID_I_SFX = 170, ID_I_RULES = 171, ID_I_RANK = 172, ID_I_NAME = 173
 };
 
 enum { CMD_START = 1000, CMD_DIFF, CMD_RANK, CMD_RULES, CMD_EXIT, CMD_ABOUT, CMD_SFX };
@@ -87,37 +94,46 @@ enum { GS_INPUT = 0, GS_RESULT };
 /* 本题判定结果 */
 enum { RES_RIGHT = 0, RES_WRONG, RES_TIMEOUT, RES_NOANS_OK, RES_NOANS_BAD };
 
-/*====================== 二、主题配色 ======================*/
-static const COLORREF COL_BG      = RGB( 11,  13,  19);   /* 窗口底色         */
-static const COLORREF COL_BG2     = RGB( 17,  20,  29);   /* 渐变辅助         */
-static const COLORREF COL_PANEL   = RGB( 22,  26,  36);   /* 面板             */
-static const COLORREF COL_PANEL2  = RGB( 31,  36,  50);   /* 次级面板         */
-static const COLORREF COL_LINE    = RGB( 46,  54,  72);   /* 分隔线           */
-static const COLORREF COL_GOLD    = RGB(201, 162,  75);   /* 金色             */
-static const COLORREF COL_GOLD_L  = RGB(246, 218, 140);   /* 亮金             */
-static const COLORREF COL_GOLD_D  = RGB(112,  88,  38);   /* 暗金             */
-static const COLORREF COL_TEXT    = RGB(230, 235, 245);   /* 正文             */
-static const COLORREF COL_DIM     = RGB(124, 136, 156);   /* 次要文字         */
-static const COLORREF COL_GREEN   = RGB( 82, 206, 132);   /* 正确             */
-static const COLORREF COL_RED     = RGB(232,  96,  96);   /* 错误             */
-static const COLORREF COL_WHITE   = RGB(255, 255, 255);
-static const COLORREF COL_CARD    = RGB(251, 251, 248);   /* 牌面             */
-static const COLORREF COL_CARD_B  = RGB(206, 206, 200);   /* 牌面描边         */
-static const COLORREF COL_BLACK   = RGB( 30,  30,  34);   /* 黑色花色         */
-static const COLORREF COL_REDC    = RGB(190,  40,  50);   /* 红色花色         */
-static const COLORREF COL_NAVY    = RGB( 26,  44,  86);   /* 牌背             */
+/*====================== 二、界园终端主题配色 ======================*/
+/* 深色金属背景 + 米白终端面板 + 黑字 + 品红点缀（明日方舟 / 界园风格） */
+
+static const COLORREF P_BG_TOP  = RGB( 39,  47,  56);   /* 背景上沿         */
+static const COLORREF P_BG_BOT  = RGB( 13,  16,  21);   /* 背景下沿         */
+static const COLORREF P_PAPER   = RGB(245, 243, 238);   /* 终端纸面         */
+static const COLORREF P_PAPER2  = RGB(230, 226, 217);   /* 纸面次级         */
+static const COLORREF P_INK     = RGB( 22,  22,  22);   /* 墨黑             */
+static const COLORREF P_INK2    = RGB( 70,  70,  70);   /* 次级墨色         */
+static const COLORREF P_GRAY    = RGB(135, 135, 135);   /* 灰字             */
+static const COLORREF P_WHITE   = RGB(255, 255, 255);
+static const COLORREF P_PINK    = RGB(238,  92, 140);   /* 品红主色         */
+static const COLORREF P_PINK_D  = RGB(198,  52,  98);   /* 深品红           */
+static const COLORREF P_GOLD    = RGB(198, 168, 106);   /* 细金线           */
+
+/* 旧逻辑沿用的颜色（判题提示、扑克牌花色） */
+static const COLORREF COL_GREEN = RGB( 24, 130,  78);
+static const COLORREF COL_RED   = RGB(196,  54,  66);
+static const COLORREF COL_TEXT  = RGB(226, 230, 235);
+static const COLORREF COL_BLACK = RGB( 30,  30,  34);
+static const COLORREF COL_REDC  = RGB(190,  40,  50);
 
 /*====================== 三、字体与句柄 ======================*/
-static HFONT  F_TITLE  = NULL;      /* 主标题 46                            */
-static HFONT  F_SUB    = NULL;      /* 副标题 18                            */
-static HFONT  F_H1     = NULL;      /* 小节标题 26                          */
-static HFONT  F_H2     = NULL;      /* 卡片标题 22                          */
-static HFONT  F_BODY   = NULL;      /* 正文 17                              */
-static HFONT  F_BODY_S = NULL;      /* 小字 15                              */
-static HFONT  F_BTN    = NULL;      /* 按钮 19                              */
-static HFONT  F_RANK   = NULL;      /* 牌面点数字 30                        */
-static HFONT  F_RANK_B = NULL;      /* 牌面中心点数 52                      */
-static HFONT  F_MONO   = NULL;      /* 等宽数字 26                          */
+static HFONT  F_HERO   = NULL;      /* 大标题 40（中文）                    */
+static HFONT  F_H1     = NULL;      /* 卡片标题 32                          */
+static HFONT  F_H2     = NULL;      /* 小标题 26                            */
+static HFONT  F_H3     = NULL;      /* 按钮 / 强调 20                       */
+static HFONT  F_BODY   = NULL;      /* 正文 16                              */
+static HFONT  F_SMALL  = NULL;      /* 小字 12                              */
+static HFONT  F_TINY   = NULL;      /* 微字 10                              */
+static HFONT  F_CAP    = NULL;      /* 拉丁小标题 10（Bahnschrift）         */
+static HFONT  F_NUM    = NULL;      /* 数字 22                              */
+static HFONT  F_NUM_M  = NULL;      /* 数字 26                              */
+static HFONT  F_NUM_L  = NULL;      /* 数字 38                              */
+static HFONT  F_NUM_XL = NULL;      /* 数字 64                              */
+static HFONT  F_NUM_XXL= NULL;      /* 数字 104                             */
+static HFONT  F_CARD_NUM = NULL;    /* 牌面点数 76                          */
+static HFONT  F_VERT   = NULL;      /* 竖排标题 48                          */
+static HFONT  F_WATER  = NULL;      /* 背景水印 250                         */
+static HFONT  F_MONO   = NULL;      /* 等宽数字 24                          */
 static HFONT  F_EDIT   = NULL;      /* 输入框（设备单位）                   */
 static HFONT  F_SUIT_S = NULL;      /* 花色 26                              */
 static HFONT  F_SUIT_M = NULL;      /* 花色 38                              */
@@ -132,6 +148,9 @@ static WNDPROC g_editOld = NULL;    /* 输入框原窗口过程                     */
 static double g_scale    = 1.0;     /* 1 逻辑单位 = g_scale 像素          */
 static int    g_hover    = 0;       /* 悬停按钮编号                         */
 static int    g_press    = 0;       /* 按下按钮编号                         */
+static int    g_hoverSlot = -1;     /* 悬停按钮在列表中的下标（区分重复 ID）*/
+static int    g_pressSlot = -1;     /* 按下按钮在列表中的下标               */
+static bool   g_nameFromMenu = false; /* 姓名界面是“档案改名”而非开局     */
 
 /* 逻辑单位 -> 设备像素（仅用于初始窗口尺寸、截图等场合） */
 static int sc(int v) { return (int)(v * g_scale + 0.5); }
@@ -153,11 +172,6 @@ static double viewScale(int cw, int ch)
     if (s > 4.0)  s = 4.0;
     return s;
 }
-
-static const char *RANKS[13] = {
-    "A", "2", "3", "4", "5", "6", "7",
-    "8", "9", "10", "J", "Q", "K"
-};
 
 /*====================== 四、数据结构 ======================*/
 
@@ -249,20 +263,6 @@ static void fillRect(HDC dc, int x, int y, int w, int h, COLORREF c)
     DeleteObject(br);
 }
 
-static void roundFill(HDC dc, int x, int y, int w, int h, int r,
-                      COLORREF fill, COLORREF border, int t)
-{
-    HBRUSH br = CreateSolidBrush(fill);
-    HPEN   pn = CreatePen(PS_SOLID, t, border);
-    HBRUSH ob = (HBRUSH)SelectObject(dc, br);
-    HPEN   op = (HPEN)SelectObject(dc, pn);
-    RoundRect(dc, x, y, x + w + 1, y + h + 1, r, r);
-    SelectObject(dc, ob);
-    SelectObject(dc, op);
-    DeleteObject(br);
-    DeleteObject(pn);
-}
-
 /* 输出文字：fmt 常用 DT_LEFT/DT_CENTER/DT_RIGHT + DT_VCENTER|DT_SINGLELINE */
 static void tx(HDC dc, const char *s, int x, int y, int w, int h,
                HFONT f, COLORREF c, UINT fmt)
@@ -272,7 +272,7 @@ static void tx(HDC dc, const char *s, int x, int y, int w, int h,
     int        om = SetBkMode(dc, TRANSPARENT);
     RECT       r;
     r.left = x; r.top = y; r.right = x + w; r.bottom = y + h;
-    DrawTextA(dc, s, -1, &r, fmt | DT_NOPREFIX);
+    DrawTextA(dc, s, -1, &r, fmt | DT_NOPREFIX | DT_SINGLELINE);
     SetBkMode(dc, om);
     SetTextColor(dc, oc);
     SelectObject(dc, of);
@@ -290,7 +290,7 @@ static void txChar(HDC dc, wchar_t wc, int x, int y, int w, int h,
     wchar_t    buf[2];
     buf[0] = wc;
     buf[1] = 0;
-    DrawTextW(dc, buf, 1, &r, fmt | DT_NOPREFIX);
+    DrawTextW(dc, buf, 1, &r, fmt | DT_NOPREFIX | DT_SINGLELINE);
     SetBkMode(dc, om);
     SetTextColor(dc, oc);
     SelectObject(dc, of);
@@ -306,13 +306,6 @@ static wchar_t suitChar(int suit)
 static COLORREF suitColor(int suit)
 {
     return (suit == 1 || suit == 2) ? COL_REDC : COL_BLACK;
-}
-
-/* 带金色渐层感的水平装饰线 */
-static void goldLine(HDC dc, int x, int y, int w)
-{
-    fillRect(dc, x, y, w, 1, COL_GOLD_D);
-    fillRect(dc, x + w / 4, y, w / 2, 1, COL_GOLD);
 }
 
 /*====================== 六、有理数运算 ======================*/
@@ -1058,69 +1051,440 @@ static int insertRecord(Record list[], int &count, const Record &rec, bool &newB
     return 0;
 }
 
-/*====================== 十、按钮描述表 ======================*/
+/*====================== 十、界面基础绘制 ======================*/
 
-/* style: 0 = 描边按钮  1 = 主按钮（金底）  2 = 文字按钮 */
+/* 颜色在第二节定义：P_ 开头为“界园终端”浅色卡面主题 */
+
+static void hline(HDC dc, int x, int y, int w, COLORREF c, int t)
+{
+    fillRect(dc, x, y, w, t, c);
+}
+
+static void vline(HDC dc, int x, int y, int h, COLORREF c, int t)
+{
+    fillRect(dc, x, y, t, h, c);
+}
+
+static void cutPts(POINT p[8], int x, int y, int w, int h, int cut)
+{
+    p[0].x = x + cut;       p[0].y = y;
+    p[1].x = x + w - cut;   p[1].y = y;
+    p[2].x = x + w;         p[2].y = y + cut;
+    p[3].x = x + w;         p[3].y = y + h - cut;
+    p[4].x = x + w - cut;   p[4].y = y + h;
+    p[5].x = x + cut;       p[5].y = y + h;
+    p[6].x = x;             p[6].y = y + h - cut;
+    p[7].x = x;             p[7].y = y + cut;
+}
+
+static void polySolid(HDC dc, const POINT *p, int n, COLORREF c)
+{
+    HBRUSH br = CreateSolidBrush(c);
+    HBRUSH ob = (HBRUSH)SelectObject(dc, br);
+    HPEN   op = (HPEN)SelectObject(dc, GetStockObject(NULL_PEN));
+    Polygon(dc, (POINT *)p, n);
+    SelectObject(dc, ob);
+    SelectObject(dc, op);
+    DeleteObject(br);
+}
+
+static void polyOutline(HDC dc, const POINT *p, int n, COLORREF c, int t)
+{
+    HPEN pn = CreatePen(PS_SOLID, t, c);
+    HPEN op = (HPEN)SelectObject(dc, pn);
+    Polyline(dc, p, n);
+    SelectObject(dc, op);
+    DeleteObject(pn);
+}
+
+static void cutFill(HDC dc, int x, int y, int w, int h, int cut, COLORREF c)
+{
+    POINT p[8];
+    cutPts(p, x, y, w, h, cut);
+    polySolid(dc, p, 8, c);
+}
+
+static void cutBorder(HDC dc, int x, int y, int w, int h, int cut,
+                      COLORREF c, int t)
+{
+    POINT p[9];
+    cutPts(p, x, y, w, h, cut);
+    p[8] = p[0];
+    polyOutline(dc, p, 9, c, t);
+}
+
+/* 有投影的浅色卡片 */
+static void paperCard(HDC dc, int x, int y, int w, int h, int cut,
+                      COLORREF fill, COLORREF border, int t, bool shadow)
+{
+    if (shadow) cutFill(dc, x + 6, y + 7, w, h, cut, RGB(8, 10, 14));
+    cutFill(dc, x, y, w, h, cut, fill);
+    if (t > 0) cutBorder(dc, x, y, w, h, cut, border, t);
+}
+
+static COLORREF mixColor(COLORREF a, COLORREF b, double t)
+{
+    int r = (int)(GetRValue(a) + (GetRValue(b) - GetRValue(a)) * t + 0.5);
+    int g = (int)(GetGValue(a) + (GetGValue(b) - GetGValue(a)) * t + 0.5);
+    int bl = (int)(GetBValue(a) + (GetBValue(b) - GetBValue(a)) * t + 0.5);
+    return RGB(r, g, bl);
+}
+
+static void diamond(HDC dc, int cx, int cy, int r, COLORREF c, bool solid)
+{
+    POINT p[4];
+    p[0].x = cx;     p[0].y = cy - r;
+    p[1].x = cx + r; p[1].y = cy;
+    p[2].x = cx;     p[2].y = cy + r;
+    p[3].x = cx - r; p[3].y = cy;
+    if (solid) polySolid(dc, p, 4, c);
+    else {
+        POINT q[5];
+        for (int i = 0; i < 4; ++i) q[i] = p[i];
+        q[4] = p[0];
+        polyOutline(dc, q, 5, c, 2);
+    }
+}
+
+static void barcode(HDC dc, int x, int y, int w, int h, COLORREF c)
+{
+    static const int bars[15] = { 2, 4, 1, 3, 1, 5, 2, 1, 4, 2, 3, 1, 1, 4, 2 };
+    int cx = x, i = 0;
+
+    while (cx < x + w) {
+        int bw = bars[i % 15];
+        if (cx + bw > x + w) bw = x + w - cx;
+        fillRect(dc, cx, y, bw, h, c);
+        cx += bw + 2;
+        i++;
+    }
+}
+
+/* 用折线逼近圆弧，避免 GDI Arc 的方向差异 */
+static void arcPoly(HDC dc, int cx, int cy, int r, double a0, double a1,
+                    COLORREF c, int t)
+{
+    POINT p[26];
+    int   n = 0;
+    int   steps = 24;
+
+    if (n > 25) n = 25;
+    for (int i = 0; i <= steps && n < 26; ++i) {
+        double a = (a0 + (a1 - a0) * i / steps) * 3.14159265358979 / 180.0;
+        p[n].x = cx + (int)(cos(a) * r + 0.5);
+        p[n].y = cy - (int)(sin(a) * r + 0.5);
+        n++;
+    }
+    polyOutline(dc, p, n, c, t);
+}
+
+/* 线性图标：线宽统一 2 */
+static void drawIcon(HDC dc, int kind, int cx, int cy, int s, COLORREF c)
+{
+    int h = s / 2;
+    HPEN pn = CreatePen(PS_SOLID, 2, c);
+    HPEN op = (HPEN)SelectObject(dc, pn);
+    HBRUSH ob = (HBRUSH)SelectObject(dc, GetStockObject(NULL_BRUSH));
+
+    switch (kind) {
+    case 0:                                     /* 齿轮 */
+        Ellipse(dc, cx - h * 55 / 100, cy - h * 55 / 100,
+                cx + h * 55 / 100, cy + h * 55 / 100);
+        Ellipse(dc, cx - h * 18 / 100, cy - h * 18 / 100,
+                cx + h * 18 / 100, cy + h * 18 / 100);
+        for (int k = 0; k < 8; ++k) {
+            double a = k * 3.14159265 / 4.0;
+            MoveToEx(dc, cx + (int)(cos(a) * h * 0.66), cy + (int)(sin(a) * h * 0.66), NULL);
+            LineTo(dc, cx + (int)(cos(a) * h), cy + (int)(sin(a) * h));
+        }
+        break;
+
+    case 1: {                                   /* 警告三角 */
+        POINT p[4];
+        p[0].x = cx;          p[0].y = cy - h;
+        p[1].x = cx + h;      p[1].y = cy + h * 80 / 100;
+        p[2].x = cx - h;      p[2].y = cy + h * 80 / 100;
+        p[3] = p[0];
+        Polyline(dc, p, 4);
+        MoveToEx(dc, cx, cy - h * 35 / 100, NULL);
+        LineTo(dc, cx, cy + h * 25 / 100);
+        fillRect(dc, cx - 1, cy + h * 50 / 100, 3, 4, c);
+        break;
+    }
+
+    case 2:                                     /* 信封 */
+        Rectangle(dc, cx - h, cy - h * 65 / 100, cx + h, cy + h * 65 / 100);
+        MoveToEx(dc, cx - h, cy - h * 65 / 100, NULL);
+        LineTo(dc, cx, cy + h * 10 / 100);
+        LineTo(dc, cx + h, cy - h * 65 / 100);
+        break;
+
+    case 3:                                     /* 日历 */
+        Rectangle(dc, cx - h, cy - h * 80 / 100, cx + h, cy + h * 80 / 100);
+        MoveToEx(dc, cx - h, cy - h * 35 / 100, NULL);
+        LineTo(dc, cx + h, cy - h * 35 / 100);
+        MoveToEx(dc, cx - h * 5 / 10, cy - h, NULL);
+        LineTo(dc, cx - h * 5 / 10, cy - h * 6 / 10);
+        MoveToEx(dc, cx + h * 5 / 10, cy - h, NULL);
+        LineTo(dc, cx + h * 5 / 10, cy - h * 6 / 10);
+        for (int i = 0; i < 2; ++i)
+            for (int j = 0; j < 2; ++j)
+                fillRect(dc, cx - h * 55 / 100 + i * h * 6 / 10,
+                         cy - h * 5 / 100 + j * h * 4 / 10, 4, 4, c);
+        break;
+
+    case 4:                                     /* 奖杯 */
+        Rectangle(dc, cx - h * 45 / 100, cy - h * 80 / 100,
+                  cx + h * 45 / 100, cy + h * 25 / 100);
+        arcPoly(dc, cx - h * 62 / 100, cy - h * 32 / 100, h * 34 / 100, 90, 270, c, 2);
+        arcPoly(dc, cx + h * 62 / 100, cy - h * 32 / 100, h * 34 / 100, 270, 450, c, 2);
+        MoveToEx(dc, cx, cy + h * 25 / 100, NULL);
+        LineTo(dc, cx, cy + h * 60 / 100);
+        MoveToEx(dc, cx - h * 45 / 100, cy + h * 80 / 100, NULL);
+        LineTo(dc, cx + h * 45 / 100, cy + h * 80 / 100);
+        break;
+
+    case 5:                                     /* 信息 */
+        Ellipse(dc, cx - h, cy - h, cx + h, cy + h);
+        MoveToEx(dc, cx, cy - h * 25 / 100, NULL);
+        LineTo(dc, cx, cy + h * 50 / 100);
+        fillRect(dc, cx - 1, cy - h * 60 / 100, 3, 4, c);
+        break;
+
+    case 6:                                     /* 扬声器 */
+    case 7: {                                   /* 静音 */
+        POINT p[6];
+        p[0].x = cx - h;       p[0].y = cy - h * 30 / 100;
+        p[1].x = cx - h * 45 / 100; p[1].y = cy - h * 30 / 100;
+        p[2].x = cx + h * 10 / 100; p[2].y = cy - h * 80 / 100;
+        p[3].x = cx + h * 10 / 100; p[3].y = cy + h * 80 / 100;
+        p[4].x = cx - h * 45 / 100; p[4].y = cy + h * 30 / 100;
+        p[5].x = cx - h;       p[5].y = cy + h * 30 / 100;
+        polySolid(dc, p, 6, c);
+        arcPoly(dc, cx + h * 10 / 100, cy, h * 35 / 100, 60, -60, c, 2);
+        if (kind == 7) {
+            HPEN xp = CreatePen(PS_SOLID, 3, RGB(220, 80, 90));
+            HPEN xo = (HPEN)SelectObject(dc, xp);
+            MoveToEx(dc, cx - h * 80 / 100, cy - h * 80 / 100, NULL);
+            LineTo(dc, cx + h * 80 / 100, cy + h * 80 / 100);
+            SelectObject(dc, xo);
+            DeleteObject(xp);
+        }
+        break;
+    }
+
+    case 8:                                     /* 电源 */
+        arcPoly(dc, cx, cy, h * 70 / 100, 120, 420, c, 2);
+        MoveToEx(dc, cx, cy - h, NULL);
+        LineTo(dc, cx, cy);
+        break;
+
+    case 9:                                     /* 箭头 */
+        MoveToEx(dc, cx - h * 60 / 100, cy, NULL);
+        LineTo(dc, cx + h * 50 / 100, cy);
+        MoveToEx(dc, cx + h * 10 / 100, cy - h * 45 / 100, NULL);
+        LineTo(dc, cx + h * 55 / 100, cy);
+        LineTo(dc, cx + h * 10 / 100, cy + h * 45 / 100);
+        break;
+
+    case 10:                                    /* 返回 */
+        MoveToEx(dc, cx + h * 40 / 100, cy - h * 70 / 100, NULL);
+        LineTo(dc, cx - h * 40 / 100, cy);
+        LineTo(dc, cx + h * 40 / 100, cy + h * 70 / 100);
+        break;
+    }
+
+    SelectObject(dc, ob);
+    SelectObject(dc, op);
+    DeleteObject(pn);
+}
+
+/* 粉色 “24” 放射徽记 */
+static void emblem(HDC dc, int cx, int cy, int r, COLORREF col, COLORREF dark)
+{
+    HPEN pn = CreatePen(PS_SOLID, (r >= 40) ? 3 : 2, col);
+    HPEN op = (HPEN)SelectObject(dc, pn);
+
+    for (int k = 0; k < 24; ++k) {
+        double a  = k * 3.14159265358979 / 12.0;
+        double r2 = (k % 2 == 0) ? r : r * 0.72;
+        MoveToEx(dc, cx + (int)(cos(a) * r * 0.45), cy + (int)(sin(a) * r * 0.45), NULL);
+        LineTo(dc, cx + (int)(cos(a) * r2), cy + (int)(sin(a) * r2));
+    }
+    SelectObject(dc, op);
+    DeleteObject(pn);
+
+    HBRUSH br = CreateSolidBrush(RGB(255, 255, 255));
+    HBRUSH ob = (HBRUSH)SelectObject(dc, br);
+    HPEN   np = CreatePen(PS_SOLID, 2, col);
+    HPEN   opn = (HPEN)SelectObject(dc, np);
+    Ellipse(dc, cx - r * 52 / 100, cy - r * 52 / 100,
+            cx + r * 52 / 100, cy + r * 52 / 100);
+    SelectObject(dc, ob);
+    SelectObject(dc, opn);
+    DeleteObject(br);
+    DeleteObject(np);
+
+    if (r >= 20) {
+        HFONT f = (r >= 40) ? F_H3 : F_TINY;
+        tx(dc, "24", cx - r, cy - r * 40 / 100, r * 2, r * 80 / 100,
+           f, dark, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
+}
+
+
+/*====================== 十一、背景与页脚 ======================*/
+
+static void drawBackdrop(HDC dc)
+{
+    /* 纵向渐变 */
+    for (int i = 0; i < DES_H; i += 4) {
+        int hh = (i + 4 > DES_H) ? (DES_H - i) : 5;
+        fillRect(dc, 0, i, DES_W, hh, mixColor(P_BG_TOP, P_BG_BOT,
+                                               i / (double)DES_H));
+    }
+
+    /* 斜向结构光带 */
+    POINT s1[4] = { { 300, 0 }, { 760, 0 }, { 430, DES_H }, { 0, DES_H } };
+    POINT s2[4] = { { 520, 0 }, { 660, 0 }, { 330, DES_H }, { 170, DES_H } };
+    POINT s3[5] = { { 880, 0 }, { DES_W, 0 }, { DES_W, 210 },
+                    { 760, DES_H }, { 560, DES_H } };
+    polySolid(dc, s1, 4, RGB(46, 56, 67));
+    polySolid(dc, s2, 4, RGB(53, 64, 76));
+    polySolid(dc, s3, 5, RGB(34, 42, 51));
+
+    /* 远处的桁架线 */
+    hline(dc, 0, 520, DES_W, RGB(58, 69, 81), 2);
+    hline(dc, 0, 560, DES_W, RGB(31, 38, 46), 6);
+    for (int x = 0; x < DES_W; x += 160) {
+        POINT p[2] = { { x, 0 }, { x - 90, 620 } };
+        polyOutline(dc, p, 2, RGB(44, 53, 63), 1);
+    }
+
+    /* 右上大圆环 */
+    HPEN   pn = CreatePen(PS_SOLID, 2, RGB(50, 61, 72));
+    HPEN   op = (HPEN)SelectObject(dc, pn);
+    HBRUSH ob = (HBRUSH)SelectObject(dc, GetStockObject(NULL_BRUSH));
+    Ellipse(dc, 840, -110, 1420, 470);
+    SelectObject(dc, op);
+    DeleteObject(pn);
+
+    pn = CreatePen(PS_SOLID, 1, RGB(40, 49, 59));
+    op = (HPEN)SelectObject(dc, pn);
+    Ellipse(dc, 920, -30, 1340, 390);
+    SelectObject(dc, op);
+    SelectObject(dc, ob);
+    DeleteObject(pn);
+
+    /* 底部平台与黄色栏杆 */
+    fillRect(dc, 0, 690, DES_W, DES_H - 690, RGB(15, 18, 23));
+    hline(dc, 0, 690, DES_W, RGB(64, 60, 46), 2);
+    hline(dc, 60, 676, 460, RGB(150, 126, 74), 3);
+    for (int x = 80; x < 520; x += 64)
+        vline(dc, x, 676, 30, RGB(96, 82, 52), 3);
+}
+
+static void drawFooter(HDC dc, const char *left, const char *right)
+{
+    hline(dc, 28, 766, 1224, RGB(54, 62, 72), 1);
+    tx(dc, left, 28, 772, 1000, 22, F_SMALL, RGB(130, 138, 148),
+       DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    if (right != NULL && right[0] != '\0')
+        tx(dc, right, 1052, 772, 200, 22, F_SMALL, RGB(120, 128, 138),
+           DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+}
+
+static int bestScore()
+{
+    int b = 0;
+    for (int i = 0; i < g.recCount; ++i)
+        if (g.recs[i].score > b) b = g.recs[i].score;
+    return b;
+}
+
+static int playerLevel()
+{
+    int lv = 1 + bestScore() / 150;
+    if (lv > 99) lv = 99;
+    return lv;
+}
+
+/*====================== 十二、按钮描述表 ======================*/
+
+/* style: 0=纸面按钮 1=黑底主按钮 2=纸面文字按钮 3=难度卡(自绘)
+          4=复选框 5=深色文字按钮 7=自绘卡片 8=图标按钮 9=返回图标 */
 struct BtnDesc {
     int         x, y, w, h;
     int         id;
-    const char *text;
     int         style;
+    const char *text;
 };
 
 static const BtnDesc BTN_MENU[] = {
-    { 420, 330, 200, 54, ID_M_START, "开 始 游 戏", 1 },
-    { 420, 398, 200, 46, ID_M_DIFF,  "难 度 设 置", 0 },
-    { 420, 454, 200, 46, ID_M_RANK,  "高 手 排 行 榜", 0 },
-    { 420, 510, 200, 46, ID_M_RULES, "游 戏 规 则", 0 },
-    { 420, 566, 200, 46, ID_M_EXIT,  "退 出 游 戏", 2 }
+    { 700, 128, 380, 192, ID_M_START,  7, "" },   /* 主视觉：开始对局   */
+    { 1096, 128, 152,  88, ID_M_RANK,   7, "" },   /* 排行榜横幅         */
+    { 1096, 228, 152,  92, ID_M_ABOUT,  7, "" },   /* 关于横幅           */
+    { 700, 340, 270, 152, ID_M_DIFF,   7, "" },   /* 难度设置           */
+    { 978, 340, 270, 152, ID_M_NAME,   7, "" },   /* 玩家档案           */
+    { 700, 508, 178,  92, ID_M_RANK,   7, "" },   /* 排行榜             */
+    { 884, 508, 178,  92, ID_M_RULES,  7, "" },   /* 游戏规则           */
+    { 1068, 508, 178, 92, ID_M_EXIT,   7, "" },   /* 退出               */
+    { 978, 616, 270, 112, ID_M_ABOUT,  7, "" },   /* 关于               */
+    { 336, 674, 100,  82, ID_M_SFX,    7, "" },   /* 音效开关           */
+    { 28, 26, 40, 40, ID_I_SFX,   8, "" },
+    { 78, 26, 40, 40, ID_I_RULES, 8, "" },
+    { 128, 26, 40, 40, ID_I_RANK, 8, "" },
+    { 178, 26, 40, 40, ID_I_NAME, 8, "" }
 };
-static const int BTN_MENU_N = 5;
+static const int BTN_MENU_N = 14;
 
 static const BtnDesc BTN_DIFF[] = {
-    { 115, 250, 250, 200, ID_D_0,    "", 3 },
-    { 395, 250, 250, 200, ID_D_1,    "", 3 },
-    { 675, 250, 250, 200, ID_D_2,    "", 3 },
-    { 440, 520, 160, 46,  ID_D_BACK, "返 回", 0 }
+    { 160, 210, 300, 270, ID_D_0, 3, "" },
+    { 490, 210, 300, 270, ID_D_1, 3, "" },
+    { 820, 210, 300, 270, ID_D_2, 3, "" },
+    { 28, 24, 44, 44, ID_D_BACK, 9, "" },
+    { 520, 560, 240, 54, ID_D_OK, 1, "应 用 并 返 回" }
 };
-static const int BTN_DIFF_N = 4;
+static const int BTN_DIFF_N = 5;
 
 static const BtnDesc BTN_RANK[] = {
-    { 440, 574, 160, 46, ID_R_BACK, "返 回", 0 }
+    { 28, 24, 44, 44, ID_R_BACK, 9, "" }
 };
 static const int BTN_RANK_N = 1;
 
 static const BtnDesc BTN_RULES[] = {
-    { 440, 588, 160, 46, ID_U_BACK, "返 回", 0 }
+    { 28, 24, 44, 44, ID_U_BACK, 9, "" }
 };
 static const int BTN_RULES_N = 1;
 
 static const BtnDesc BTN_NAME[] = {
-    { 350, 430, 150, 48, ID_N_OK,   "确  定", 1 },
-    { 540, 430, 150, 48, ID_N_SKIP, "跳  过", 0 },
-    { 445, 540, 150, 38, ID_N_BACK, "返回主菜单", 2 }
+    { 28, 24, 44, 44, ID_N_BACK, 9, "" },
+    { 430, 400, 180, 52, ID_N_OK,   1, "确  定" },
+    { 630, 400, 180, 52, ID_N_SKIP, 0, "跳  过" }
 };
 static const int BTN_NAME_N = 3;
 
 static const BtnDesc BTN_GAME_INPUT[] = {
-    { 580, 316, 120, 50, ID_G_NOANS,  "本题无解", 4 },
-    { 716, 316, 160, 50, ID_G_SUBMIT, "提  交",   1 },
-    { 450, 560, 140, 40, ID_G_BACK,   "返回主菜单", 2 }
+    { 28, 24, 44, 44, ID_G_BACK, 9, "" },
+    { 774, 510, 126, 36, ID_G_NOANS,  4, "本题无解" },
+    { 774, 554, 186, 46, ID_G_SUBMIT, 1, "提  交" }
 };
 static const int BTN_GAME_INPUT_N = 3;
 
 static const BtnDesc BTN_GAME_RESULT[] = {
-    { 440, 382, 160, 48, ID_G_NEXT, "下 一 题", 1 },
-    { 450, 560, 140, 40, ID_G_BACK, "返回主菜单", 2 }
+    { 28, 24, 44, 44, ID_G_BACK, 9, "" },
+    { 540, 624, 200, 56, ID_G_NEXT, 1, "下 一 题" },
+    { 760, 624, 180, 56, ID_G_BACK2, 5, "返回主菜单" }
 };
-static const int BTN_GAME_RESULT_N = 2;
+static const int BTN_GAME_RESULT_N = 3;
 
 static const BtnDesc BTN_SUMMARY[] = {
-    { 248, 578, 170, 48, ID_S_AGAIN, "再 来 一 局", 1 },
-    { 435, 578, 170, 48, ID_S_RANK,  "查看排行榜", 0 },
-    { 622, 578, 170, 48, ID_S_MENU,  "返回主菜单", 0 }
+    { 28, 24, 44, 44, ID_S_BACK, 9, "" },
+    { 300, 600, 200, 56, ID_S_AGAIN, 1, "再 来 一 局" },
+    { 530, 600, 200, 56, ID_S_RANK,  0, "查看排行榜" },
+    { 760, 600, 200, 56, ID_S_MENU,  5, "返回主菜单" }
 };
-static const int BTN_SUMMARY_N = 3;
+static const int BTN_SUMMARY_N = 4;
 
 static const BtnDesc *curButtons(int &n)
 {
@@ -1139,51 +1503,70 @@ static const BtnDesc *curButtons(int &n)
     return NULL;
 }
 
-/*====================== 十一、按钮绘制 ======================*/
+/*====================== 十三、按钮绘制 ======================*/
+
+static int iconKindOfId(int id)
+{
+    switch (id) {
+    case ID_I_SFX: case ID_M_SFX:   return g_sfxOn ? 6 : 7;
+    case ID_I_RULES:               return 1;
+    case ID_I_RANK:                return 2;
+    case ID_I_NAME:                return 3;
+    }
+    return 0;
+}
 
 static void drawButton(HDC dc, const BtnDesc &b, bool hover, bool press)
 {
     int x = b.x, y = b.y, w = b.w, h = b.h;
+    int dy = press ? 1 : 0;
 
-    if (b.style == 3) return;                 /* 难度卡片单独绘制           */
-
-    if (b.style == 2) {                       /* 文字按钮                   */
-        COLORREF c = hover ? COL_GOLD_L : COL_DIM;
-        tx(dc, b.text, x, y, w, h, F_BTN, c, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        if (hover) fillRect(dc, x + w / 2 - 20, y + h - 6, 40, 1, COL_GOLD);
-        return;
-    }
-
-    int dy = press ? 2 : 0;
-
-    if (b.style == 1) {                       /* 主按钮：金底               */
-        COLORREF bg = press ? COL_GOLD_D : (hover ? COL_GOLD_L : COL_GOLD);
-        roundFill(dc, x, y + dy, w, h, 10, bg, COL_GOLD_L, 1);
-        tx(dc, b.text, x, y + dy, w, h, F_BTN,
-           RGB(26, 22, 12), DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    } else if (b.style == 4) {                /* 复选框：本题无解           */
-        int checked = g.noAnswer;
-        COLORREF bg = press ? COL_PANEL2 : (hover ? COL_PANEL2 : COL_PANEL);
-        roundFill(dc, x, y + dy, w, h, 8, bg, checked ? COL_GOLD : COL_LINE, 1);
-        int bx = x + 12, by = y + dy + h / 2 - 8;
-        roundFill(dc, bx, by, 16, 16, 3, checked ? COL_GOLD : COL_PANEL2,
-                  checked ? COL_GOLD_L : COL_LINE, 1);
-        if (checked) {
-            HPEN pn = CreatePen(PS_SOLID, 2, RGB(26, 22, 12));
+    if (b.style == 1) {                       /* 黑底主按钮 */
+        COLORREF bg = press ? RGB(38, 40, 46) : (hover ? RGB(30, 32, 38) : P_INK);
+        cutFill(dc, x, y + dy, w, h, 4, bg);
+        fillRect(dc, x, y + dy, 5, h, P_PINK);
+        tx(dc, b.text, x + 6, y + dy, w - 6, h, F_H3, P_WHITE,
+           DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        if (hover) cutBorder(dc, x - 2, y + dy - 2, w + 4, h + 4, 6, P_PINK, 2);
+    } else if (b.style == 4) {                /* 复选框 */
+        int by = y + dy + h / 2 - 8;
+        fillRect(dc, x + 10, by, 16, 16, g.noAnswer ? P_INK : P_PAPER2);
+        {
+            HPEN pn = CreatePen(PS_SOLID, 1, g.noAnswer ? P_INK : P_GRAY);
             HPEN op = (HPEN)SelectObject(dc, pn);
-            MoveToEx(dc, bx + 4, by + 8, NULL);
-            LineTo(dc, bx + 7, by + 12);
-            LineTo(dc, bx + 12, by + 4);
+            HBRUSH ob = (HBRUSH)SelectObject(dc, GetStockObject(NULL_BRUSH));
+            Rectangle(dc, x + 10, by, x + 26, by + 16);
+            SelectObject(dc, ob);
             SelectObject(dc, op);
             DeleteObject(pn);
         }
-        tx(dc, b.text, x + 34, y + dy, w - 40, h, F_BODY_S,
-           checked ? COL_GOLD_L : COL_TEXT, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-    } else {                                  /* 描边按钮                   */
-        COLORREF bg = press ? COL_PANEL2 : (hover ? COL_PANEL2 : COL_PANEL);
-        roundFill(dc, x, y + dy, w, h, 8, bg, hover ? COL_GOLD : COL_GOLD_D, 1);
-        tx(dc, b.text, x, y + dy, w, h, F_BTN,
-           hover ? COL_GOLD_L : COL_TEXT, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        if (g.noAnswer) {
+            HPEN pn = CreatePen(PS_SOLID, 2, P_WHITE);
+            HPEN op = (HPEN)SelectObject(dc, pn);
+            MoveToEx(dc, x + 14, by + 8, NULL);
+            LineTo(dc, x + 17, by + 11);
+            LineTo(dc, x + 22, by + 4);
+            SelectObject(dc, op);
+            DeleteObject(pn);
+        }
+        tx(dc, b.text, x + 34, y + dy, w - 36, h, F_SMALL,
+           hover ? P_PINK_D : P_INK, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    } else if (b.style == 5) {                /* 深色底上的文字按钮 */
+        COLORREF c = (press || hover) ? P_PINK : RGB(196, 202, 210);
+        tx(dc, b.text, x, y + dy, w, h, F_BODY, c,
+           DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        if (hover) hline(dc, x + w / 2 - 24, y + h - 8, 48, P_PINK, 2);
+    } else if (b.style == 2) {                /* 纸面文字按钮 */
+        COLORREF c = (press || hover) ? P_PINK_D : P_INK2;
+        tx(dc, b.text, x, y + dy, w, h, F_BODY, c,
+           DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        if (hover) hline(dc, x + w / 2 - 24, y + h - 8, 48, P_PINK, 2);
+    } else {                                  /* 纸面按钮 */
+        COLORREF bg = press ? P_PAPER2 : P_PAPER;
+        cutFill(dc, x, y + dy, w, h, 4, bg);
+        cutBorder(dc, x, y + dy, w, h, 4, hover ? P_PINK : P_INK, hover ? 2 : 1);
+        tx(dc, b.text, x, y + dy, w, h, F_H3, P_INK,
+           DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     }
 }
 
@@ -1191,151 +1574,402 @@ static void drawAllButtons(HDC dc)
 {
     int n = 0;
     const BtnDesc *bs = curButtons(n);
+
     for (int i = 0; i < n; ++i) {
-        if (bs[i].style == 3) continue;
-        drawButton(dc, bs[i], g_hover == bs[i].id, g_press == bs[i].id);
-    }
-}
+        if (bs[i].style == 3 || bs[i].style == 7) continue;
 
-/*====================== 十二、扑克牌绘制 ======================*/
+        bool hover = (g_hover == bs[i].id);
+        bool press = (g_press == bs[i].id);
 
-static void drawCard(HDC dc, int x, int y, int w, int h,
-                     int value, int suit, bool faceDown)
-{
-    roundFill(dc, x + 3, y + 4, w, h, 12, RGB(8, 9, 13), RGB(8, 9, 13), 1);
-
-    if (faceDown) {
-        roundFill(dc, x, y, w, h, 12, COL_NAVY, COL_GOLD, 2);
-        for (int i = 0; i < 5; ++i) {
-            for (int j = 0; j < 7; ++j) {
-                int cx = x + 16 + i * 22;
-                int cy = y + 18 + j * 20;
-                if (cx > x + w - 20) continue;
-                HPEN pn = CreatePen(PS_SOLID, 1, COL_GOLD_D);
+        if (bs[i].style == 8) {
+            int cx = bs[i].x + bs[i].w / 2;
+            int cy = bs[i].y + bs[i].h / 2;
+            if (hover) {
+                HPEN pn = CreatePen(PS_SOLID, 2, P_PINK);
                 HPEN op = (HPEN)SelectObject(dc, pn);
-                MoveToEx(dc, cx, cy - 5, NULL);
-                LineTo(dc, cx + 5, cy);
-                LineTo(dc, cx, cy + 5);
-                LineTo(dc, cx - 5, cy);
-                LineTo(dc, cx, cy - 5);
+                HBRUSH ob = (HBRUSH)SelectObject(dc, GetStockObject(NULL_BRUSH));
+                Ellipse(dc, cx - 21, cy - 21, cx + 21, cy + 21);
+                SelectObject(dc, ob);
                 SelectObject(dc, op);
                 DeleteObject(pn);
             }
+            drawIcon(dc, iconKindOfId(bs[i].id), cx, cy, 30,
+                     hover ? P_PINK : RGB(226, 230, 235));
+        } else if (bs[i].style == 9) {
+            int cx = bs[i].x + bs[i].w / 2;
+            int cy = bs[i].y + bs[i].h / 2;
+            if (hover) {
+                HPEN pn = CreatePen(PS_SOLID, 2, P_PINK);
+                HPEN op = (HPEN)SelectObject(dc, pn);
+                HBRUSH ob = (HBRUSH)SelectObject(dc, GetStockObject(NULL_BRUSH));
+                Ellipse(dc, cx - 22, cy - 22, cx + 22, cy + 22);
+                SelectObject(dc, ob);
+                SelectObject(dc, op);
+                DeleteObject(pn);
+            }
+            drawIcon(dc, 10, cx, cy, 26, hover ? P_PINK : RGB(228, 232, 237));
+        } else {
+            drawButton(dc, bs[i], hover, press);
         }
-        return;
     }
-
-    roundFill(dc, x, y, w, h, 12, COL_CARD, COL_CARD_B, 1);
-
-    COLORREF    ink = suitColor(suit);
-    const char *rk  = RANKS[value - 1];
-
-    /* 左上角：点数 + 花色 */
-    tx(dc, rk, x + 9, y + 3, 60, 36, F_RANK, ink, DT_LEFT | DT_TOP);
-    txChar(dc, suitChar(suit), x + 11, y + 37, 30, 30, F_SUIT_S, ink,
-           DT_LEFT | DT_TOP);
-
-    /* 右下角：点数 + 花色 */
-    tx(dc, rk, x + w - 69, y + h - 41, 60, 36, F_RANK, ink,
-       DT_RIGHT | DT_TOP);
-    txChar(dc, suitChar(suit), x + w - 41, y + h - 71, 30, 30, F_SUIT_S, ink,
-           DT_RIGHT | DT_TOP);
-
-    /* 中央大花色 */
-    txChar(dc, suitChar(suit), x, y + h / 2 - 28, w, 60, F_SUIT_L, ink,
-           DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 }
 
-/*====================== 十三、公共绘制块 ======================*/
+/*====================== 十四、主菜单（界园终端） ======================*/
 
-static void drawBackdrop(HDC dc)
+static bool slotHover(int i) { return g_hoverSlot == i; }
+static bool slotPress(int i) { return g_pressSlot == i; }
+
+static void menuTopBar(HDC dc)
 {
-    fillRect(dc, 0, 0, DES_W, DES_H, COL_BG);
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    char date[64];
+    snprintf(date, sizeof(date), "%04d/%02d/%02d  %02d:%02d",
+             st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute);
+    tx(dc, date, 980, 12, 268, 20, F_CAP, RGB(168, 174, 182),
+       DT_RIGHT | DT_TOP | DT_SINGLELINE);
+
+    const int gx[3] = { 940, 1050, 1160 };
+    char buf[32];
+
+    diamond(dc, gx[0] + 17, 50, 9, RGB(86, 156, 206), true);
+    diamond(dc, gx[1] + 17, 50, 9, P_PINK, false);
+    diamond(dc, gx[2] + 17, 50, 9, P_GOLD, false);
+
+    snprintf(buf, sizeof(buf), "%d", g.totalScore);
+    tx(dc, buf, gx[0] + 34, 34, 90, 28, F_NUM_M, P_WHITE, DT_LEFT | DT_TOP);
+    tx(dc, "总分", gx[0] + 34, 66, 60, 18, F_SMALL, RGB(150, 156, 164),
+       DT_LEFT | DT_TOP);
+
+    snprintf(buf, sizeof(buf), "%d", bestScore());
+    tx(dc, buf, gx[1] + 34, 34, 90, 28, F_NUM_M, P_WHITE, DT_LEFT | DT_TOP);
+    tx(dc, "最高", gx[1] + 34, 66, 60, 18, F_SMALL, RGB(150, 156, 164),
+       DT_LEFT | DT_TOP);
+
+    tx(dc, LEVELS[g.diff].name, gx[2] + 34, 36, 70, 26, F_H3, P_WHITE,
+       DT_LEFT | DT_TOP);
+    tx(dc, "难度", gx[2] + 34, 66, 60, 18, F_SMALL, RGB(150, 156, 164),
+       DT_LEFT | DT_TOP);
+
+    hline(dc, 916, 84, 332, RGB(84, 92, 102), 1);
+    vline(dc, 916, 70, 15, RGB(120, 128, 138), 2);
 }
 
-static void drawTitleBarBand(HDC dc, const char *title, const char *sub)
+static void menuLeftColumn(HDC dc)
 {
-    fillRect(dc, 0, 0, DES_W, 100, COL_PANEL);
-    fillRect(dc, 0, 100, DES_W, 1, COL_GOLD_D);
-    fillRect(dc, 0, 101, DES_W, 1, RGB(24, 28, 38));
+    static const char *VCH[4] = { "二", "十", "四", "点" };
 
-    tx(dc, title, 0, 6, DES_W, 56, F_TITLE, COL_GOLD_L,
+    for (int i = 0; i < 4; ++i)
+        tx(dc, VCH[i], 60, 130 + i * 72, 70, 72, F_VERT,
+           RGB(208, 214, 221), DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+    hline(dc, 58, 118, 70, P_PINK, 3);
+    vline(dc, 136, 132, 338, RGB(120, 128, 138), 1);
+
+    tx(dc, "24", 140, 100, 440, 300, F_WATER, RGB(43, 52, 62),
+       DT_LEFT | DT_TOP);
+
+    /* 等级徽章 */
+    const int cx = 112, cy = 470, r = 45;
+    HBRUSH br = CreateSolidBrush(RGB(16, 19, 24));
+    HBRUSH ob = (HBRUSH)SelectObject(dc, br);
+    HPEN   pn = CreatePen(PS_SOLID, 2, RGB(226, 230, 235));
+    HPEN   op = (HPEN)SelectObject(dc, pn);
+    Ellipse(dc, cx - r, cy - r, cx + r, cy + r);
+    SelectObject(dc, ob);
+    SelectObject(dc, op);
+    DeleteObject(br);
+    DeleteObject(pn);
+
+    arcPoly(dc, cx, cy, r - 1, 200, 340, P_GOLD, 4);
+
+    char lv[8];
+    snprintf(lv, sizeof(lv), "%02d", playerLevel());
+    tx(dc, lv, cx - 45, cy - 30, 90, 46, F_NUM_L, P_WHITE,
+       DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    tx(dc, "L V", cx - 30, cy + 22, 60, 16, F_CAP, RGB(190, 196, 203),
+       DT_CENTER | DT_TOP | DT_SINGLELINE);
+
+    tx(dc, g.player[0] ? g.player : "玩家", 58, 516, 300, 42, F_HERO, P_WHITE,
+       DT_LEFT | DT_TOP | DT_SINGLELINE);
+    tx(dc, "ID: LOCAL-0001", 58, 558, 260, 18, F_CAP, RGB(150, 157, 166),
+       DT_LEFT | DT_TOP | DT_SINGLELINE);
+
+    /* 对白框 */
+    paperCard(dc, 56, 586, 478, 76, 8, RGB(14, 17, 22), RGB(190, 196, 204), 1, false);
+    tx(dc, "V O I C E", 70, 591, 100, 14, F_CAP, P_PINK, DT_LEFT | DT_TOP);
+    tx(dc, "四条运算，二十四点。", 70, 608, 440, 24, F_BODY, P_WHITE,
+       DT_LEFT | DT_TOP | DT_SINGLELINE);
+    tx(dc, "限时之内，一算即中。", 70, 634, 440, 24, F_BODY,
+       RGB(206, 211, 218), DT_LEFT | DT_TOP | DT_SINGLELINE);
+
+    /* 最新战报 */
+    cutFill(dc, 61, 679, 268, 82, 8, RGB(8, 10, 14));
+    cutFill(dc, 56, 674, 268, 82, 8, P_PINK);
+    POINT tag[4] = { { 300, 674 }, { 324, 674 }, { 324, 756 }, { 292, 756 } };
+    polySolid(dc, tag, 4, P_PINK_D);
+    tx(dc, "B E S T   R E C O R D", 70, 681, 200, 14, F_CAP,
+       RGB(255, 235, 242), DT_LEFT | DT_TOP);
+    {
+        char b[48];
+        snprintf(b, sizeof(b), "最高 %d 分", bestScore());
+        tx(dc, b, 70, 696, 220, 34, F_H2, P_WHITE, DT_LEFT | DT_TOP);
+    }
+    tx(dc, bestScore() > 0 ? "BEST RECORD" : "NO RECORD YET", 70, 732, 220, 16,
+       F_CAP, RGB(255, 226, 236), DT_LEFT | DT_TOP);
+
+    /* 音效开关 */
+    paperCard(dc, 336, 674, 100, 82, 6, P_PAPER, P_INK, 1, true);
+    if (slotHover(9)) cutBorder(dc, 334, 672, 104, 86, 8, P_PINK, 2);
+    drawIcon(dc, g_sfxOn ? 6 : 7, 386, 700, 20, P_INK);
+    tx(dc, g_sfxOn ? "音效 开" : "音效 关", 336, 716, 100, 22, F_SMALL, P_INK,
        DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
-    if (sub != NULL && sub[0] != '\0')
-        tx(dc, sub, 0, 64, DES_W, 26, F_SUB, COL_DIM,
-           DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    /* 题数信息块 */
+    paperCard(dc, 444, 674, 90, 82, 6, RGB(30, 35, 42), RGB(120, 128, 136), 1, true);
+    tx(dc, "3", 444, 688, 90, 30, F_NUM_M, P_WHITE,
+       DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    tx(dc, "题 / 局", 444, 720, 90, 18, F_SMALL, RGB(190, 196, 203),
+       DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 }
 
-/* 顶部四角的小菱形装饰 */
-static void drawCornerDecor(HDC dc)
+static void menuHero(HDC dc)
 {
-    const int X[2] = { 26, DES_W - 46 };
-    for (int i = 0; i < 2; ++i) {
-        int x = X[i], y = 34;
-        HPEN pn = CreatePen(PS_SOLID, 1, COL_GOLD_D);
-        HPEN op = (HPEN)SelectObject(dc, pn);
-        MoveToEx(dc, x + 10, y, NULL);
-        LineTo(dc, x + 20, y + 14);
-        LineTo(dc, x + 10, y + 28);
-        LineTo(dc, x, y + 14);
-        LineTo(dc, x + 10, y);
-        SelectObject(dc, op);
-        DeleteObject(pn);
+    const int x = 700, y = 128, w = 380, h = 192;
+    bool hover = slotHover(0);
+    bool press = slotPress(0);
+
+    paperCard(dc, x, y, w, h, 12, P_PAPER, P_INK, 2, true);
+    if (press) cutBorder(dc, x - 3, y - 3, w + 6, h + 6, 14, P_PINK_D, 3);
+    else if (hover) cutBorder(dc, x - 3, y - 3, w + 6, h + 6, 14, P_PINK, 2);
+
+    fillRect(dc, x + 20, y + 22, 10, 10, P_PINK);
+    tx(dc, "T E R M I N A L   0 1", x + 38, y + 16, 180, 18, F_CAP,
+       RGB(110, 110, 110), DT_LEFT | DT_TOP);
+    emblem(dc, x + 346, y + 30, 22, P_PINK, P_PINK_D);
+
+    tx(dc, "24", x + 20, y + 30, 170, 120, F_NUM_XXL, P_INK, DT_LEFT | DT_TOP);
+
+    vline(dc, x + 170, y + 44, 114, P_INK, 3);
+    vline(dc, x + 176, y + 44, 114, RGB(160, 160, 160), 1);
+
+    cutFill(dc, x + 190, y + 40, 126, 22, 3, P_PINK);
+    {
+        char tag[64];
+        snprintf(tag, sizeof(tag), "当前难度 · %s", LEVELS[g.diff].name);
+        tx(dc, tag, x + 190, y + 41, 126, 20, F_TINY, P_WHITE,
+           DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
+
+    tx(dc, "开始对局", x + 190, y + 66, 190, 52, F_HERO, P_INK,
+       DT_LEFT | DT_TOP);
+    {
+        char info[96];
+        const Difficulty &cd = LEVELS[g.diff];
+        snprintf(info, sizeof(info), "3 题一局 · %d 秒 / 题", cd.limitSec);
+        tx(dc, info, x + 190, y + 120, 190, 22, F_SMALL, P_INK2,
+           DT_LEFT | DT_TOP);
+        snprintf(info, sizeof(info), "单题满分 %d 分", cd.baseScore + cd.bonusScore);
+        tx(dc, info, x + 190, y + 142, 190, 20, F_SMALL,
+           RGB(110, 110, 110), DT_LEFT | DT_TOP);
+    }
+
+    fillRect(dc, x, y + h - 34, w, 34, P_INK);
+    tx(dc, "点击进入终端", x + 18, y + h - 34, 280, 34, F_SMALL, P_WHITE,
+       DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    drawIcon(dc, 9, x + 344, y + h - 17, 20, P_PINK);
+}
+
+static void menuBanner(HDC dc, int x, int y, int w, int h,
+                       const char *title, const char *en,
+                       COLORREF c1, COLORREF c2, int iconKind, bool hover)
+{
+    cutFill(dc, x + 5, y + 5, w, h, 6, RGB(9, 12, 16));
+    cutFill(dc, x, y, w, h, 6, c1);
+    cutBorder(dc, x, y, w, h, 6, hover ? P_PINK : RGB(150, 166, 182), hover ? 2 : 1);
+
+    POINT deco[3] = { { x + w - 58, y }, { x + w, y }, { x + w, y + 58 } };
+    polySolid(dc, deco, 3, c2);
+
+    tx(dc, title, x + 14, y + 11, w - 28, 30, F_H2, P_WHITE,
+       DT_LEFT | DT_TOP);
+    tx(dc, en, x + 15, y + 44, w - 30, 16, F_CAP, RGB(198, 210, 222),
+       DT_LEFT | DT_TOP);
+    drawIcon(dc, iconKind, x + w - 28, y + h - 28, 20, RGB(222, 230, 238));
+    hline(dc, x + 14, y + h - 12, w - 58, P_PINK, 2);
+}
+
+static void menuGrid(HDC dc)
+{
+    /* 难度设置 */
+    {
+        const int x = 700, y = 340, w = 270, h = 152;
+        paperCard(dc, x, y, w, h, 10, P_PAPER, P_INK, 2, true);
+        if (slotHover(3)) cutBorder(dc, x - 2, y - 2, w + 4, h + 4, 12, P_PINK, 2);
+        tx(dc, "难度设置", x + 18, y + 6, 200, 44, F_H1, P_INK, DT_LEFT | DT_TOP);
+        tx(dc, "D I F F I C U L T Y", x + 20, y + 50, 180, 16, F_CAP,
+           RGB(110, 110, 110), DT_LEFT | DT_TOP);
+        emblem(dc, 936, 432, 27, P_PINK, P_PINK_D);
+
+        static const char *PIP[3] = { "简单", "普通", "困难" };
+        for (int i = 0; i < 3; ++i) {
+            int px = 718 + i * 64;
+            if (g.diff == i) {
+                fillRect(dc, px, 410, 56, 28, P_INK);
+                tx(dc, PIP[i], px, 410, 56, 28, F_SMALL, P_WHITE,
+                   DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            } else {
+                HPEN pn = CreatePen(PS_SOLID, 1, RGB(120, 120, 120));
+                HPEN op = (HPEN)SelectObject(dc, pn);
+                HBRUSH ob = (HBRUSH)SelectObject(dc, GetStockObject(NULL_BRUSH));
+                Rectangle(dc, px, 410, px + 56, 438);
+                SelectObject(dc, ob);
+                SelectObject(dc, op);
+                DeleteObject(pn);
+                tx(dc, PIP[i], px, 410, 56, 28, F_SMALL, P_INK2,
+                   DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            }
+        }
+        {
+            const Difficulty &cd = LEVELS[g.diff];
+            char b[64];
+            snprintf(b, sizeof(b), "限时 %d 秒 / 满分 %d 分",
+                     cd.limitSec, cd.baseScore + cd.bonusScore);
+            tx(dc, b, x + 18, y + 112, 240, 20, F_SMALL,
+               RGB(110, 110, 110), DT_LEFT | DT_TOP);
+        }
+    }
+
+    /* 玩家档案 */
+    {
+        const int x = 978, y = 340, w = 270, h = 152;
+        paperCard(dc, x, y, w, h, 10, P_PAPER, P_INK, 2, true);
+        if (slotHover(4)) cutBorder(dc, x - 2, y - 2, w + 4, h + 4, 12, P_PINK, 2);
+        tx(dc, "玩家档案", x + 18, y + 6, 200, 44, F_H1, P_INK, DT_LEFT | DT_TOP);
+        tx(dc, "P L A Y E R", x + 20, y + 50, 140, 16, F_CAP,
+           RGB(110, 110, 110), DT_LEFT | DT_TOP);
+        barcode(dc, 1170, 360, 56, 96, RGB(40, 40, 40));
+        tx(dc, g.player[0] ? g.player : "玩家", x + 18, y + 74, 180, 34,
+           F_H2, P_INK, DT_LEFT | DT_TOP);
+        char b[64];
+        snprintf(b, sizeof(b), "最高分 %d  ·  记录 %d 条", bestScore(), g.recCount);
+        tx(dc, b, x + 18, y + 112, 200, 20, F_SMALL, RGB(110, 110, 110),
+           DT_LEFT | DT_TOP);
+    }
+
+    /* 排行榜 */
+    {
+        const int x = 700, y = 508, w = 178, h = 92;
+        cutFill(dc, x + 5, y + 5, w, h, 8, RGB(9, 12, 16));
+        cutFill(dc, x, y, w, h, 8, P_PINK);
+        if (slotHover(5)) cutBorder(dc, x - 2, y - 2, w + 4, h + 4, 10, P_WHITE, 2);
+        tx(dc, "排行榜", x + 16, y + 10, 140, 34, F_H2, P_WHITE, DT_LEFT | DT_TOP);
+        tx(dc, "R A N K I N G", x + 17, y + 46, 140, 16, F_CAP,
+           RGB(240, 220, 228), DT_LEFT | DT_TOP);
+        tx(dc, "查看高手成绩", x + 16, y + 66, 150, 18, F_SMALL, P_WHITE,
+           DT_LEFT | DT_TOP);
+        fillRect(dc, x, y + h - 4, w, 4, P_PINK_D);
+    }
+
+    /* 游戏规则 */
+    {
+        const int x = 884, y = 508, w = 178, h = 92;
+        paperCard(dc, x, y, w, h, 8, P_PAPER, P_INK, 1, true);
+        if (slotHover(6)) cutBorder(dc, x - 2, y - 2, w + 4, h + 4, 10, P_PINK, 2);
+        tx(dc, "游戏规则", x + 16, y + 10, 150, 34, F_H2, P_INK, DT_LEFT | DT_TOP);
+        tx(dc, "R U L E S", x + 17, y + 46, 140, 16, F_CAP,
+           RGB(110, 110, 110), DT_LEFT | DT_TOP);
+        tx(dc, "四张牌 · 凑 24", x + 16, y + 66, 150, 18, F_SMALL,
+           RGB(70, 70, 70), DT_LEFT | DT_TOP);
+    }
+
+    /* 退出 */
+    {
+        const int x = 1068, y = 508, w = 178, h = 92;
+        cutFill(dc, x + 5, y + 5, w, h, 8, RGB(9, 12, 16));
+        cutFill(dc, x, y, w, h, 8, RGB(24, 27, 33));
+        cutBorder(dc, x, y, w, h, 8, slotHover(7) ? P_PINK : RGB(150, 120, 132),
+                  slotHover(7) ? 2 : 1);
+        tx(dc, "退出", x + 16, y + 10, 120, 34, F_H2, P_WHITE, DT_LEFT | DT_TOP);
+        tx(dc, "Q U I T", x + 17, y + 46, 120, 16, F_CAP, RGB(196, 202, 210),
+           DT_LEFT | DT_TOP);
+        drawIcon(dc, 8, x + 142, y + 38, 22, P_PINK);
+    }
+
+    /* 今日战报 */
+    {
+        const int x = 700, y = 616, w = 270, h = 112;
+        paperCard(dc, x, y, w, h, 10, P_PAPER, P_INK, 2, true);
+        tx(dc, "训练战报", x + 18, y + 8, 180, 34, F_H2, P_INK, DT_LEFT | DT_TOP);
+        tx(dc, "R E P O R T", x + 20, y + 46, 120, 16, F_CAP,
+           RGB(110, 110, 110), DT_LEFT | DT_TOP);
+        char b[32];
+        snprintf(b, sizeof(b), "%d", bestScore());
+        tx(dc, b, x + 130, y + 2, 132, 76, F_NUM_XL, P_PINK, DT_RIGHT | DT_TOP);
+        snprintf(b, sizeof(b), "记录 %d 条  ·  最高 %d 分", g.recCount, bestScore());
+        tx(dc, b, x + 18, y + 84, 240, 20, F_SMALL, RGB(110, 110, 110),
+           DT_LEFT | DT_TOP);
+    }
+
+    /* 关于 */
+    {
+        const int x = 978, y = 616, w = 270, h = 112;
+        paperCard(dc, x, y, w, h, 10, P_PAPER, P_INK, 2, true);
+        if (slotHover(8)) cutBorder(dc, x - 2, y - 2, w + 4, h + 4, 12, P_PINK, 2);
+        tx(dc, "关于", x + 18, y + 8, 150, 34, F_H2, P_INK, DT_LEFT | DT_TOP);
+        tx(dc, "A B O U T", x + 20, y + 46, 120, 16, F_CAP,
+           RGB(110, 110, 110), DT_LEFT | DT_TOP);
+        tx(dc, "计算二十四点 · 课程设计", x + 18, y + 70, 240, 20, F_SMALL,
+           RGB(110, 110, 110), DT_LEFT | DT_TOP);
+        hline(dc, x + 18, y + 96, 234, RGB(198, 194, 186), 1);
     }
 }
 
-static void drawStatusBar(HDC dc, const char *left, const char *right)
+static void menuTooltip(HDC dc)
 {
-    int y = DES_H - 40;
-    fillRect(dc, 0, y, DES_W, 40, COL_PANEL);
-    fillRect(dc, 0, y, DES_W, 1, COL_GOLD_D);
+    static const char *TIP[4] = { "音效", "规则", "排行", "档案" };
 
-    tx(dc, left, 26, y, 620, 40, F_BODY_S, COL_DIM,
-       DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-    if (right != NULL && right[0] != '\0')
-        tx(dc, right, DES_W - 646, y, 620, 40, F_BODY, COL_GOLD,
-           DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+    if (g_hoverSlot >= 10 && g_hoverSlot <= 13) {
+        int i = g_hoverSlot - 10;
+        int x = 28 + i * 50 - 20;
+        fillRect(dc, x, 72, 64, 24, RGB(18, 21, 26));
+        hline(dc, x, 72, 64, P_PINK, 2);
+        tx(dc, TIP[i], x, 72, 64, 24, F_SMALL, P_WHITE,
+           DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
 }
-
-/*====================== 十四、各界面绘制 ======================*/
 
 static void drawMenuScreen(HDC dc)
 {
     drawBackdrop(dc);
-    fillRect(dc, 0, 0, DES_W, 300, COL_PANEL);
-    fillRect(dc, 0, 300, DES_W, 1, COL_GOLD_D);
-    fillRect(dc, 0, 301, DES_W, 1, COL_BG2);
+    menuTopBar(dc);
+    menuLeftColumn(dc);
 
-    drawCornerDecor(dc);
+    menuHero(dc);
+    menuBanner(dc, 1096, 128, 152,  88, "排行榜", "R A N K I N G",
+               RGB(34, 56, 82), RGB(20, 32, 48), 4, slotHover(1));
+    menuBanner(dc, 1096, 228, 152,  92, "关于", "A B O U T",
+               RGB(86, 30, 38), RGB(46, 18, 22), 5, slotHover(2));
 
-    tx(dc, "计 算 二 十 四 点", 0, 96, DES_W, 78, F_TITLE, COL_GOLD_L,
-       DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    tx(dc, "2 4   P O I N T   G A M E", 0, 172, DES_W, 32, F_SUB, COL_GOLD,
-       DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    goldLine(dc, DES_W / 2 - 150, 216, 300);
-    tx(dc, "四条运算，二十四点。限时之内，一算即中。", 0, 228, DES_W, 30,
-       F_BODY, COL_DIM, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    menuGrid(dc);
+    menuTooltip(dc);
 
-    /* 当前难度信息条 */
-    const Difficulty &d = LEVELS[g.diff];
-    char info[128];
-    snprintf(info, sizeof(info), "当前难度  ◆  %s        每题限时  %d 秒        单题满分  %d 分",
-             d.name, d.limitSec, d.baseScore + d.bonusScore);
-
-    roundFill(dc, 320, 610, 400, 34, 8, COL_PANEL, COL_LINE, 1);
-    tx(dc, info, 320, 610, 400, 34, F_BODY_S, COL_GOLD,
-       DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    drawFooter(dc, "CALC-24  TERMINAL  //  计算二十四点", "V2.0");
 }
 
-static void drawDifficultyScreen(HDC dc)
+/*====================== 十五、难度 / 规则 / 排行榜 ======================*/
+
+static void drawDiffScreen(HDC dc)
 {
     drawBackdrop(dc);
-    drawTitleBarBand(dc, "难 度 设 置", "越难的时间越短，但分数也越高");
-    drawCornerDecor(dc);
+    tx(dc, "难度设置", 94, 20, 320, 40, F_H2, P_WHITE, DT_LEFT | DT_TOP);
+    tx(dc, "D I F F I C U L T Y   S E L E C T", 96, 58, 360, 16, F_CAP,
+       RGB(150, 157, 166), DT_LEFT | DT_TOP);
 
+    static const char *NAME[3] = { "简单", "普通", "困难" };
+    static const char *EN[3]   = { "E A S Y", "N O R M A L", "H A R D" };
     static const char *DESC[3] = {
-        "时间充裕，适合新手熟悉玩法",
+        "时间充裕，适合熟悉玩法",
         "限时收紧，考验运算速度",
         "极限挑战，高手之间的较量"
     };
@@ -1346,363 +1980,443 @@ static void drawDifficultyScreen(HDC dc)
         bool sel = (g.diff == i);
         bool hov = (g_hover == BTN_DIFF[i].id);
 
-        COLORREF bg     = sel ? COL_PANEL2 : COL_PANEL;
-        COLORREF border = sel ? COL_GOLD : (hov ? COL_GOLD_D : COL_LINE);
-        int      thick  = sel ? 2 : 1;
+        paperCard(dc, x, y, w, h, 12, sel ? P_PAPER : RGB(238, 235, 229),
+                  P_INK, 2, true);
+        if (sel) {
+            fillRect(dc, x, y, w, 8, P_PINK);
+            cutFill(dc, x + 16, y + 24, 72, 24, 3, P_INK);
+            tx(dc, "当 前", x + 16, y + 26, 72, 20, F_TINY, P_WHITE,
+               DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        } else if (hov) {
+            cutBorder(dc, x - 2, y - 2, w + 4, h + 4, 14, P_PINK, 2);
+        }
 
-        roundFill(dc, x, y, w, h, 14, bg, border, thick);
+        char num[8];
+        snprintf(num, sizeof(num), "0%d", i + 1);
+        tx(dc, num, x + w - 100, y + 20, 80, 78, F_NUM_XL,
+           sel ? P_PINK : RGB(196, 192, 184), DT_RIGHT | DT_TOP);
 
-        if (sel) fillRect(dc, x + 1, y + 16, 4, h - 32, COL_GOLD);
+        tx(dc, NAME[i], x + 24, y + 60, 180, 52, F_HERO, P_INK, DT_LEFT | DT_TOP);
+        tx(dc, EN[i], x + 26, y + 112, 180, 18, F_CAP, RGB(110, 110, 110),
+           DT_LEFT | DT_TOP);
 
-        tx(dc, LEVELS[i].name, x, y + 20, w, 44, F_H1,
-           sel ? COL_GOLD_L : COL_TEXT, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        hline(dc, x + 24, y + 148, w - 48, RGB(198, 194, 186), 1);
 
-        char buf[64];
-        snprintf(buf, sizeof(buf), "每题限时 %d 秒", LEVELS[i].limitSec);
-        tx(dc, buf, x, y + 74, w, 26, F_BODY, COL_TEXT,
-           DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-        snprintf(buf, sizeof(buf), "基础 %d + 奖励 %d", LEVELS[i].baseScore,
+        char b[64];
+        snprintf(b, sizeof(b), "每题限时  %d 秒", LEVELS[i].limitSec);
+        tx(dc, b, x + 24, y + 162, 240, 22, F_BODY, P_INK, DT_LEFT | DT_TOP);
+        snprintf(b, sizeof(b), "基础 %d + 时间 %d", LEVELS[i].baseScore,
                  LEVELS[i].bonusScore);
-        tx(dc, buf, x, y + 102, w, 24, F_BODY_S, COL_DIM,
-           DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-        snprintf(buf, sizeof(buf), "单题满分 %d 分",
+        tx(dc, b, x + 24, y + 190, 240, 20, F_SMALL, RGB(90, 90, 90),
+           DT_LEFT | DT_TOP);
+        snprintf(b, sizeof(b), "单题满分  %d 分",
                  LEVELS[i].baseScore + LEVELS[i].bonusScore);
-        tx(dc, buf, x, y + 132, w, 28, F_H2, COL_GOLD,
-           DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-        tx(dc, DESC[i], x + 10, y + 166, w - 20, 24, F_BODY_S, COL_DIM,
-           DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        tx(dc, b, x + 24, y + 214, 240, 22, F_H3, P_PINK_D, DT_LEFT | DT_TOP);
+        tx(dc, DESC[i], x + 24, y + 242, w - 40, 20, F_SMALL,
+           RGB(110, 110, 110), DT_LEFT | DT_TOP);
     }
+
+    drawFooter(dc, "选择难度后应用返回，下一局生效", "ESC 返回");
 }
 
 static void drawRulesScreen(HDC dc)
 {
     drawBackdrop(dc);
-    drawTitleBarBand(dc, "游 戏 规 则", "先看清规则，再开始计时");
-    drawCornerDecor(dc);
+    paperCard(dc, 150, 110, 980, 620, 12, P_PAPER, P_INK, 2, true);
 
-    static const char *LINES[] = {
-        "1  每局共 3 道题，每道题随机发出 4 张扑克牌，点数取 1～10（1 显示为 A）。",
-        "2  用四则运算 + - * / 和括号，把 4 个点数各用一次、算到 24 即得分。",
-        "3  题目保证全程用整数运算就能算出，不需要分数；表达式中也不能写小数。",
-        "4  若判断本题无解，请勾选「本题无解」后提交；判断正确同样得分。",
-        "5  超过限时自动判为超时，本题 0 分，直接进入下一题。",
-        "6  得分 = 基础分 + 时间奖励 × 剩余秒数 ÷ 本题限时，剩余时间越多得分越高。",
-        "7  得分越高、用时越短，排行榜名次越靠前；同名玩家榜上只保留最好成绩。"
+    fillRect(dc, 150, 110, 100, 620, P_INK);
+    static const char *VCH[2] = { "规", "则" };
+    for (int i = 0; i < 2; ++i)
+        tx(dc, VCH[i], 160, 150 + i * 66, 80, 66, F_VERT, P_WHITE,
+           DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    tx(dc, "R U L E S", 160, 292, 80, 18, F_CAP, P_PINK,
+       DT_CENTER | DT_TOP);
+
+    tx(dc, "游戏规则", 290, 142, 320, 44, F_H1, P_INK, DT_LEFT | DT_TOP);
+    tx(dc, "先看清规则，再开始计时", 292, 186, 400, 20, F_SMALL,
+       RGB(110, 110, 110), DT_LEFT | DT_TOP);
+    hline(dc, 290, 216, 780, P_INK, 2);
+
+    static const char *LINE[7] = {
+        "每局 3 题，每题随机发 4 张牌，点数取 1~10（A 记为 1）。",
+        "用 + - * / 和括号，把 4 个数字各用一次，算出 24。",
+        "题目保证全程整数运算可解，不需要使用分数。",
+        "若判断本题无解，勾选「本题无解」后提交；判断正确同样得分。",
+        "超时自动判负，本题 0 分，直接进入下一题。",
+        "得分 = 基础分 + 时间奖励 × 剩余秒数 ÷ 本题限时。",
+        "得分越高、用时越短，排行越靠前；同名只保留最好成绩。"
     };
 
-    roundFill(dc, 40, 124, DES_W - 80, 452, 12, COL_PANEL, COL_LINE, 1);
-
-    int y = 150;
     for (int i = 0; i < 7; ++i) {
-        tx(dc, LINES[i], 76, y, DES_W - 152, 30, F_BODY, COL_TEXT,
-           DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-        y += 44;
+        char no[8];
+        snprintf(no, sizeof(no), "%02d", i + 1);
+        tx(dc, no, 290, 240 + i * 54, 40, 20, F_CAP, P_PINK_D, DT_LEFT | DT_TOP);
+        tx(dc, LINE[i], 336, 234 + i * 54, 720, 26, F_BODY, P_INK,
+           DT_LEFT | DT_TOP);
+        hline(dc, 290, 268 + i * 54, 780, RGB(214, 210, 202), 1);
     }
 
-    fillRect(dc, 76, 470, DES_W - 152, 1, COL_LINE);
+    tx(dc, "单题满分  简单 100  ·  普通 130  ·  困难 160", 290, 638, 760, 24,
+       F_SMALL, RGB(90, 90, 90), DT_LEFT | DT_TOP);
+    tx(dc, "按 Esc 返回主菜单", 290, 676, 400, 22, F_SMALL, P_PINK_D,
+       DT_LEFT | DT_TOP);
 
-    char buf[128];
-    snprintf(buf, sizeof(buf),
-             "单题满分：简单 %d 分 · 普通 %d 分 · 困难 %d 分",
-             LEVELS[0].baseScore + LEVELS[0].bonusScore,
-             LEVELS[1].baseScore + LEVELS[1].bonusScore,
-             LEVELS[2].baseScore + LEVELS[2].bonusScore);
-    tx(dc, buf, 0, 496, DES_W, 30, F_BODY_S, COL_GOLD,
-       DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    drawFooter(dc, "训练手册  //  24 POINT MANUAL", "V2.0");
 }
 
 static void drawRankScreen(HDC dc)
 {
     drawBackdrop(dc);
-    drawTitleBarBand(dc, "高 手 排 行 榜", "同名玩家只保留个人最好成绩");
-    drawCornerDecor(dc);
+    paperCard(dc, 120, 110, 1040, 620, 12, P_PAPER, P_INK, 2, true);
 
-    int x = 40, y = 126, w = DES_W - 80;
-    int rowH = 38;
-    int nShow = (g.recCount < 9) ? g.recCount : 9;
+    fillRect(dc, 120, 110, 1040, 58, P_INK);
+    tx(dc, "高手排行榜", 144, 112, 260, 36, F_H2, P_WHITE, DT_LEFT | DT_TOP);
+    tx(dc, "R A N K I N G   B O A R D", 146, 146, 260, 14, F_CAP,
+       RGB(200, 206, 214), DT_LEFT | DT_TOP);
 
-    roundFill(dc, x, y, w, 60 + rowH * 9, 12, COL_PANEL, COL_LINE, 1);
-
-    /* 表头 */
-    static const int CX[6] = { 30, 110, 340, 470, 600, 720 };
     static const char *HEAD[6] = { "名次", "玩家", "总分", "用时", "难度", "日期" };
+    static const int   CX[6]   = { 160, 260, 560, 690, 810, 960 };
     for (int i = 0; i < 6; ++i)
-        tx(dc, HEAD[i], x + CX[i], y + 12, 160, 26, F_BODY_S, COL_DIM,
-           DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-    fillRect(dc, x + 20, y + 44, w - 40, 1, COL_GOLD_D);
+        tx(dc, HEAD[i], CX[i], 178, 160, 22, F_SMALL, P_INK2, DT_LEFT | DT_TOP);
+    hline(dc, 144, 202, 992, P_INK, 2);
 
     if (g.recCount == 0) {
-        tx(dc, "暂时还没有成绩，快去挑战一局吧！", x, y + 120, w, 40, F_BODY,
-           COL_DIM, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        tx(dc, "暂时还没有成绩，快去挑战一局吧！", 160, 300, 960, 40, F_H2,
+           P_GRAY, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        for (int i = 0; i < 8; ++i)
+            hline(dc, 144, 214 + i * 48, 992, RGB(214, 210, 202), 1);
     }
 
-    /* 空行分隔线，使表格即使是空的也保持完整感 */
-    for (int i = 0; i <= 9; ++i) {
-        if (i == 0) continue;
-        int ly = y + 52 + rowH * i - 1;
-        fillRect(dc, x + 20, ly, w - 40, 1, COL_LINE);
-    }
-
+    int nShow = (g.recCount < 10) ? g.recCount : 10;
     for (int i = 0; i < nShow; ++i) {
         const Record &r = g.recs[i];
-        int ry = y + 52 + rowH * i;
+        int ry = 210 + i * 48;
+        if (i % 2 == 1) fillRect(dc, 130, ry, 1020, 47, RGB(236, 232, 224));
 
-        if (i % 2 == 1) fillRect(dc, x + 12, ry, w - 24, rowH - 1, COL_PANEL2);
-        COLORREF mc = COL_TEXT;
-        if (i == 0) mc = COL_GOLD_L;
-        else if (i == 1) mc = RGB(196, 202, 214);
-        else if (i == 2) mc = RGB(190, 148, 100);
+        COLORREF mc = P_INK;
+        if (i == 0) mc = RGB(176, 132, 46);
+        else if (i == 1) mc = RGB(120, 128, 138);
+        else if (i == 2) mc = RGB(160, 100, 70);
 
-        char num[16];
-        if (i < 3) snprintf(num, sizeof(num), "★ %d", i + 1);
-        else       snprintf(num, sizeof(num), "   %d", i + 1);
-        tx(dc, num, x + CX[0], ry, 90, rowH, F_MONO, mc,
+        char b[32];
+        snprintf(b, sizeof(b), "%02d", i + 1);
+        tx(dc, b, CX[0], ry, 60, 48, F_NUM_M, mc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        tx(dc, r.name, CX[1], ry, 260, 48, F_BODY, mc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+        snprintf(b, sizeof(b), "%d", r.score);
+        tx(dc, b, CX[2], ry, 100, 48, F_NUM_M, mc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+        snprintf(b, sizeof(b), "%d 秒", r.totalSeconds);
+        tx(dc, b, CX[3], ry, 110, 48, F_BODY, mc, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+        COLORREF lc = P_GRAY;
+        if (strcmp(r.level, "困难") == 0) lc = P_PINK_D;
+        else if (strcmp(r.level, "普通") == 0) lc = P_GOLD;
+        tx(dc, r.level, CX[4], ry, 110, 48, F_BODY, lc,
            DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
-        tx(dc, r.name, x + CX[1], ry, 230, rowH, F_BODY, mc,
+        tx(dc, r.date, CX[5], ry, 190, 48, F_CAP, P_GRAY,
            DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        hline(dc, 144, ry + 47, 992, RGB(214, 210, 202), 1);
+    }
 
-        snprintf(num, sizeof(num), "%d", r.score);
-        tx(dc, num, x + CX[2], ry, 120, rowH, F_MONO, mc,
-           DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    /* 记录不满 10 条时，用浅分隔线补足表格，避免大片空白 */
+    if (g.recCount > 0) {
+        for (int i = nShow; i < 10; ++i)
+            hline(dc, 144, 210 + i * 48 + 47, 992, RGB(226, 222, 214), 1);
+    }
 
-        snprintf(num, sizeof(num), "%d 秒", r.totalSeconds);
-        tx(dc, num, x + CX[3], ry, 130, rowH, F_BODY, mc,
-           DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    drawFooter(dc, "同名玩家只保留个人最好成绩", "ESC 返回");
+}
 
-        COLORREF lc = COL_DIM;
-        if (strcmp(r.level, "困难") == 0) lc = COL_RED;
-        else if (strcmp(r.level, "普通") == 0) lc = COL_GOLD;
-        tx(dc, r.level, x + CX[4], ry, 130, rowH, F_BODY, lc,
-           DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+/*====================== 十六、对局 / 姓名 / 结算 ======================*/
 
-        tx(dc, r.date, x + CX[5], ry, 200, rowH, F_BODY_S, COL_DIM,
-           DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+static void drawPlayingCard(HDC dc, int x, int y, int w, int h,
+                            int value, int suit, bool faceDown, int idx)
+{
+    cutFill(dc, x + 6, y + 8, w, h, 8, RGB(9, 12, 16));
+
+    if (faceDown) {
+        cutFill(dc, x, y, w, h, 8, RGB(27, 37, 48));
+        cutBorder(dc, x, y, w, h, 8, RGB(90, 100, 112), 1);
+        emblem(dc, x + w / 2, y + h / 2 - 8, 34, P_PINK, P_PINK_D);
+        tx(dc, "? ?", x, y + h - 56, w, 24, F_H2, RGB(150, 160, 172),
+           DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        return;
+    }
+
+    cutFill(dc, x, y, w, h, 8, RGB(248, 246, 241));
+    cutBorder(dc, x, y, w, h, 8, P_INK, 2);
+    fillRect(dc, x, y, 5, h, P_PINK);
+
+    COLORREF ink = suitColor(suit);
+    txChar(dc, suitChar(suit), x + 16, y + 6, 40, 36, F_SUIT_S, ink,
+           DT_LEFT | DT_TOP);
+    txChar(dc, suitChar(suit), x + w - 56, y + h - 76, 40, 36, F_SUIT_S, ink,
+           DT_RIGHT | DT_TOP);
+
+    char val[8];
+    snprintf(val, sizeof(val), "%d", value);
+    tx(dc, val, x, y + 42, w, 100, F_CARD_NUM, ink,
+       DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+    fillRect(dc, x, y + h - 24, w, 24, P_INK);
+    char tag[16];
+    snprintf(tag, sizeof(tag), "CARD %02d", idx + 1);
+    tx(dc, tag, x + 14, y + h - 24, w - 20, 24, F_CAP, RGB(238, 238, 238),
+       DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+    if (idx == 0) {
+        POINT p[3] = { { x + w - 26, y }, { x + w, y }, { x + w, y + 26 } };
+        polySolid(dc, p, 3, P_PINK);
     }
 }
 
 static void drawGameScreen(HDC dc)
 {
-    drawBackdrop(dc);
-
     const Difficulty &d = LEVELS[g.diff];
+    drawBackdrop(dc);
+    tx(dc, "24", 250, 110, 500, 340, F_WATER, RGB(44, 53, 63),
+       DT_LEFT | DT_TOP);
 
-    /* ---------- 顶部信息条 ---------- */
-    fillRect(dc, 0, 0, DES_W, 54, COL_PANEL);
-    fillRect(dc, 0, 54, DES_W, 1, COL_GOLD_D);
+    /* 顶栏 */
+    tx(dc, "限时训练", 94, 18, 300, 38, F_H2, P_WHITE, DT_LEFT | DT_TOP);
+    tx(dc, "T E R M I N A L   / /   R O U N D", 96, 56, 360, 16, F_CAP,
+       RGB(150, 157, 166), DT_LEFT | DT_TOP);
 
     char buf[128];
+    snprintf(buf, sizeof(buf), "第 %d / %d 题", g.round, ROUND_COUNT);
+    tx(dc, buf, 944, 18, 300, 34, F_H2, P_WHITE, DT_RIGHT | DT_TOP);
+    snprintf(buf, sizeof(buf), "SCORE %d", g.totalScore);
+    tx(dc, buf, 944, 52, 300, 18, F_CAP, RGB(168, 174, 182), DT_RIGHT | DT_TOP);
 
-    snprintf(buf, sizeof(buf), "第  %d  /  %d  题", g.round, ROUND_COUNT);
-    tx(dc, buf, 40, 0, 300, 54, F_H2, COL_TEXT,
-       DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-
-    snprintf(buf, sizeof(buf), "◆  %s  ·  %d 秒", d.name, d.limitSec);
-    tx(dc, buf, 340, 0, 360, 54, F_BODY, COL_GOLD,
-       DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-    snprintf(buf, sizeof(buf), "本局得分 %d", g.totalScore);
-    tx(dc, buf, DES_W - 340, 0, 300, 54, F_H2, COL_TEXT,
-       DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
-
-    /* ---------- 倒计时条 ---------- */
-    int bx = 228, by = 72, bw = 584, bh = 16;
-    roundFill(dc, bx, by, bw, bh, 8, COL_PANEL2, COL_LINE, 1);
-
-    int  sec  = (g.remainMs + 999) / 1000;
+    /* 计时 */
+    tx(dc, "T I M E", 36, 96, 120, 16, F_CAP, RGB(150, 157, 166),
+       DT_LEFT | DT_TOP);
+    int sec = (g.remainMs + 999) / 1000;
     if (sec < 0) sec = 0;
-    int  ratio = (g.limitMs > 0) ? (g.remainMs * 100 / g.limitMs) : 0;
+    snprintf(buf, sizeof(buf), "%d", sec);
+    tx(dc, buf, 1164, 86, 80, 34, F_NUM_M, P_WHITE, DT_RIGHT | DT_TOP);
+
+    int ratio = (g.limitMs > 0) ? (g.remainMs * 100 / g.limitMs) : 0;
     if (ratio < 0) ratio = 0;
     if (ratio > 100) ratio = 100;
+    fillRect(dc, 36, 118, 1208, 8, RGB(41, 48, 57));
+    if (ratio > 0) {
+        COLORREF barC = P_PINK;
+        if (ratio <= 25) barC = RGB(220, 70, 82);
+        else if (ratio <= 55) barC = P_GOLD;
+        fillRect(dc, 36, 118, 1208 * ratio / 100, 8, barC);
+    }
+    for (int i = 1; i < 10; ++i)
+        vline(dc, 36 + 1208 * i / 10, 118, 8, RGB(22, 26, 32), 1);
 
-    COLORREF barC = COL_GREEN;
-    if (ratio <= 25) barC = COL_RED;
-    else if (ratio <= 55) barC = COL_GOLD;
+    snprintf(buf, sizeof(buf), "难度 %s  ·  每题 %d 秒", d.name, d.limitSec);
+    tx(dc, buf, 36, 134, 300, 20, F_SMALL, RGB(150, 157, 166),
+       DT_LEFT | DT_TOP);
 
-    int fillW = bw * ratio / 100;
-    if (fillW > 0) roundFill(dc, bx, by, fillW, bh, 8, barC, barC, 1);
-
-    snprintf(buf, sizeof(buf), "%d 秒", sec);
-    tx(dc, buf, bx + bw + 12, by - 8, 110, 32, F_MONO,
-       (ratio <= 25) ? COL_RED : COL_GOLD, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-
-    /* ---------- 四张牌 ---------- */
-    int cw = 128, ch = 184, gap = 24;
+    /* 四张牌 */
+    const int cw = 160, ch = 220, gap = 24;
     int x0 = (DES_W - (cw * CARD_COUNT + gap * (CARD_COUNT - 1))) / 2;
-    int cy = 104;
-
     for (int i = 0; i < CARD_COUNT; ++i) {
         int cx = x0 + i * (cw + gap);
         if (i < g.dealt)
-            drawCard(dc, cx, cy, cw, ch, g.cards[i], g.suits[i], false);
+            drawPlayingCard(dc, cx, 172, cw, ch, g.cards[i], g.suits[i], false, i);
         else
-            drawCard(dc, cx, cy, cw, ch, 0, 0, true);
+            drawPlayingCard(dc, cx, 172, cw, ch, 0, 0, true, i);
     }
 
-    /* ---------- 输入区 / 结果区 ---------- */
-    if (g.subState == GS_INPUT) {
-        roundFill(dc, 160, 312, 408, 58, 8, COL_PANEL, COL_GOLD, 1);
+    /* 提示条 */
+    fillRect(dc, 284, 420, 712, 38, RGB(15, 18, 23));
+    fillRect(dc, 284, 420, 4, 38, P_PINK);
+    tx(dc, "使用 + - * / 与括号，把四张牌各用一次，凑成 24",
+       300, 420, 540, 38, F_SMALL, RGB(226, 230, 235),
+       DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    tx(dc, "点数 1~10   A=1", 800, 420, 190, 38, F_CAP,
+       RGB(150, 157, 166), DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
 
+    if (g.subState == GS_INPUT) {
+        paperCard(dc, 284, 478, 712, 132, 10, P_PAPER, P_INK, 2, true);
+        tx(dc, "I N P U T   E X P R E S S I O N", 304, 488, 300, 16, F_CAP,
+           RGB(110, 110, 110), DT_LEFT | DT_TOP);
+
+        /* 原生输入框的外框 */
+        fillRect(dc, 304, 514, 452, 52, P_WHITE);
+        {
+            HPEN pn = CreatePen(PS_SOLID, 2, P_INK);
+            HPEN op = (HPEN)SelectObject(dc, pn);
+            HBRUSH ob = (HBRUSH)SelectObject(dc, GetStockObject(NULL_BRUSH));
+            Rectangle(dc, 304, 514, 756, 566);
+            SelectObject(dc, ob);
+            SelectObject(dc, op);
+            DeleteObject(pn);
+        }
         if (g.dealt < CARD_COUNT) {
-            tx(dc, "正在发牌 …", 164, 316, 400, 50, F_BODY_S, COL_DIM,
+            fillRect(dc, 306, 516, 448, 48, P_WHITE);
+            tx(dc, "正在发牌 …", 306, 516, 448, 48, F_BODY, P_GRAY,
                DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         }
 
-        /* 平时显示操作提示；出现格式错误时该行改为红色提示 */
         if (g.feedback[0] != '\0') {
-            tx(dc, g.feedback, 0, 382, DES_W, 32, F_BODY, g.fbColor,
+            COLORREF fc = (g.fbColor == COL_RED) ? RGB(200, 60, 70) : P_PINK_D;
+            tx(dc, g.feedback, 284, 618, 712, 24, F_SMALL, fc,
                DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         } else {
-            tx(dc, "输入表达式后按回车或点「提交」，例如  (3+3)*(8-4)",
-               0, 382, DES_W, 32, F_BODY_S, COL_DIM,
-               DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            tx(dc, "输入表达式后按回车提交", 284, 618, 712, 24, F_SMALL,
+               RGB(150, 157, 166), DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         }
     } else {
-        roundFill(dc, 110, 300, DES_W - 220, 66, 8, COL_PANEL,
-                  g.fbColor, 1);
-        tx(dc, g.feedback, 122, 300, DES_W - 244, 66, F_H2, g.fbColor,
+        paperCard(dc, 284, 478, 712, 132, 10, P_PAPER, P_INK, 2, true);
+        COLORREF fc = (g.fbColor == COL_RED) ? RGB(196, 54, 66) : RGB(24, 130, 78);
+        tx(dc, g.feedback, 304, 492, 672, 54, F_H3, fc,
            DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-        tx(dc, "按「下一题」继续", 0, 444, DES_W, 28, F_BODY_S, COL_DIM,
-           DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        if (g.solvable) {
+            snprintf(buf, sizeof(buf), "参考答案：%s", g.refAnswer);
+            tx(dc, buf, 304, 548, 672, 24, F_SMALL, RGB(90, 90, 90),
+               DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        } else {
+            tx(dc, "本题确实无解", 304, 548, 672, 24, F_SMALL, RGB(90, 90, 90),
+               DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        }
     }
 
-    /* ---------- 三题进度指示 ---------- */
+    /* 三题进度 */
+    tx(dc, "R O U N D", 36, 638, 120, 16, F_CAP, RGB(150, 157, 166),
+       DT_LEFT | DT_TOP);
     for (int i = 0; i < ROUND_COUNT; ++i) {
-        int px = DES_W / 2 - 26 + i * 22;
-        int py = 496;
-        bool done = (i + 1 < g.round);
-        bool cur  = (i + 1 == g.round);
-        COLORREF c = COL_LINE;
-        if (done) c = COL_GOLD;
-        if (cur)  c = COL_GOLD_L;
-        roundFill(dc, px, py, 12, 12, 6, c, c, 1);
+        int bx = 36 + i * 64;
+        fillRect(dc, bx, 660, 52, 6,
+                 (i + 1 < g.round) ? P_PINK : ((i + 1 == g.round) ? P_PINK : RGB(58, 66, 76)));
+        if (i + 1 > g.round) fillRect(dc, bx, 660, 52, 6, RGB(58, 66, 76));
+        snprintf(buf, sizeof(buf), "%02d", i + 1);
+        tx(dc, buf, bx, 672, 52, 20, F_CAP,
+           (i + 1 <= g.round) ? P_WHITE : RGB(120, 128, 138), DT_LEFT | DT_TOP);
     }
 
-    goldLine(dc, 60, 532, DES_W - 120);
+    drawFooter(dc, "回车提交 · Esc 返回菜单 · M 静音 · 只允许 + - * / ( ) 和数字", "V2.0");
 }
 
 static void drawNameScreen(HDC dc)
 {
     drawBackdrop(dc);
-    drawTitleBarBand(dc, "迎 战 之 前", "留下你的大名，成绩才能记入排行榜");
-    drawCornerDecor(dc);
+    tx(dc, "玩家登记", 94, 20, 300, 40, F_H2, P_WHITE, DT_LEFT | DT_TOP);
+    tx(dc, "P L A Y E R   R E G I S T R A T I O N", 96, 58, 380, 16, F_CAP,
+       RGB(150, 157, 166), DT_LEFT | DT_TOP);
 
-    roundFill(dc, 300, 150, 440, 250, 12, COL_PANEL, COL_LINE, 1);
+    paperCard(dc, 380, 180, 520, 360, 12, P_PAPER, P_INK, 2, true);
+    tx(dc, "留下你的名字", 420, 204, 400, 38, F_H1, P_INK, DT_LEFT | DT_TOP);
+    tx(dc, "成绩会以这个名字记入排行榜", 422, 246, 420, 20, F_SMALL,
+       RGB(110, 110, 110), DT_LEFT | DT_TOP);
+    hline(dc, 420, 278, 440, P_INK, 2);
 
-    tx(dc, "玩家 姓名", 300, 176, 440, 30, F_BODY_S, COL_DIM,
-       DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    fillRect(dc, 420, 300, 440, 56, P_WHITE);
+    {
+        HPEN pn = CreatePen(PS_SOLID, 2, P_INK);
+        HPEN op = (HPEN)SelectObject(dc, pn);
+        HBRUSH ob = (HBRUSH)SelectObject(dc, GetStockObject(NULL_BRUSH));
+        Rectangle(dc, 420, 300, 860, 356);
+        SelectObject(dc, ob);
+        SelectObject(dc, op);
+        DeleteObject(pn);
+    }
+    tx(dc, "最多 16 个字符；留空则记为「玩家」", 420, 366, 440, 20, F_SMALL,
+       RGB(110, 110, 110), DT_LEFT | DT_TOP);
+    tx(dc, "排行榜上同名玩家只保留最好成绩", 420, 388, 440, 20, F_SMALL,
+       RGB(110, 110, 110), DT_LEFT | DT_TOP);
 
-    roundFill(dc, 326, 218, 388, 56, 8, COL_PANEL, COL_GOLD, 1);
+    tx(dc, "输入后按回车或点「确定」", 420, 468, 440, 22, F_SMALL, P_PINK_D,
+       DT_LEFT | DT_TOP);
 
-    tx(dc, "最多 16 个字符；留空则记为「玩家」", 300, 288, 440, 28, F_BODY_S,
-       COL_DIM, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-    tx(dc, "排行榜上同名玩家只保留最好成绩", 300, 322, 440, 28, F_BODY_S,
-       COL_DIM, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-    tx(dc, "输入后按回车或点「确定」", 300, 356, 440, 28, F_BODY_S, COL_GOLD,
-       DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    drawFooter(dc, "身份登记  //  PLAYER ID", "ESC 返回");
 }
 
 static void drawSummaryScreen(HDC dc)
 {
     drawBackdrop(dc);
-    drawTitleBarBand(dc, "本 局 结 算", "胜负已分，来看看你的成绩");
-    drawCornerDecor(dc);
+    tx(dc, "本局结算", 94, 20, 300, 40, F_H2, P_WHITE, DT_LEFT | DT_TOP);
+    tx(dc, "R E S U L T   R E P O R T", 96, 58, 360, 16, F_CAP,
+       RGB(150, 157, 166), DT_LEFT | DT_TOP);
+
+    paperCard(dc, 150, 110, 980, 440, 12, P_PAPER, P_INK, 2, true);
+
+    tx(dc, "T O T A L   S C O R E", 180, 136, 300, 18, F_CAP, RGB(110, 110, 110),
+       DT_LEFT | DT_TOP);
+    char buf[128];
+    snprintf(buf, sizeof(buf), "%d", g.totalScore);
+    tx(dc, buf, 176, 156, 300, 130, F_NUM_XXL, P_PINK_D, DT_LEFT | DT_TOP);
+    tx(dc, "分", 368, 210, 60, 34, F_BODY, P_INK2, DT_LEFT | DT_TOP);
+
+    tx(dc, "本局评价", 180, 288, 120, 20, F_SMALL, RGB(110, 110, 110),
+       DT_LEFT | DT_TOP);
+    {
+        int good = 0;
+        for (int i = 0; i < ROUND_COUNT; ++i)
+            if (g.roundRes[i] == RES_RIGHT || g.roundRes[i] == RES_NOANS_OK) good++;
+        static const char *RATE[4] = { "再接再厉", "渐入佳境", "出手不凡", "算无遗策" };
+        tx(dc, RATE[good], 180, 306, 260, 40, F_H1, P_INK, DT_LEFT | DT_TOP);
+    }
+
+    vline(dc, 520, 140, 200, RGB(198, 194, 186), 1);
 
     const Difficulty &d = LEVELS[g.diff];
+    tx(dc, "难度", 560, 150, 100, 20, F_SMALL, RGB(110, 110, 110),
+       DT_LEFT | DT_TOP);
+    tx(dc, d.name, 660, 144, 200, 28, F_H3, P_INK, DT_LEFT | DT_TOP);
+
+    tx(dc, "累计用时", 560, 190, 100, 20, F_SMALL, RGB(110, 110, 110),
+       DT_LEFT | DT_TOP);
+    snprintf(buf, sizeof(buf), "%.1f 秒", g.totalMs / 1000.0);
+    tx(dc, buf, 660, 184, 240, 28, F_H3, P_INK, DT_LEFT | DT_TOP);
+
+    tx(dc, "榜上名次", 560, 230, 100, 20, F_SMALL, RGB(110, 110, 110),
+       DT_LEFT | DT_TOP);
+    if (g.rankPos > 0) snprintf(buf, sizeof(buf), "第 %d 名", g.rankPos);
+    else               strcpy(buf, "未上榜");
+    tx(dc, buf, 660, 224, 240, 28, F_H3, P_PINK_D, DT_LEFT | DT_TOP);
+
+    if (g.newBest && g.rankPos > 0) {
+        fillRect(dc, 560, 272, 200, 28, P_PINK);
+        tx(dc, "★ 刷新个人最好成绩", 560, 272, 200, 28, F_SMALL, P_WHITE,
+           DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
 
     /* 三题明细 */
-    roundFill(dc, 120, 124, DES_W - 240, 190, 12, COL_PANEL, COL_LINE, 1);
-    roundFill(dc, 120, 124, DES_W - 240, 40, 12, COL_PANEL2, COL_LINE, 1);
-
-    tx(dc, "题 号", 150, 124, 120, 40, F_BODY_S, COL_DIM,
-       DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-    tx(dc, "判 定", 320, 124, 200, 40, F_BODY_S, COL_DIM,
-       DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-    tx(dc, "用 时", 560, 124, 160, 40, F_BODY_S, COL_DIM,
-       DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-    tx(dc, "得 分", 760, 124, 160, 40, F_BODY_S, COL_DIM,
-       DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    hline(dc, 180, 360, 920, P_INK, 2);
+    static const char *HEAD[4] = { "题号", "判定", "用时", "得分" };
+    static const int   CX[4]   = { 200, 360, 620, 820 };
+    for (int i = 0; i < 4; ++i)
+        tx(dc, HEAD[i], CX[i], 368, 160, 20, F_SMALL, RGB(110, 110, 110),
+           DT_LEFT | DT_TOP);
 
     static const char *RESNAME[5] = {
         "回答正确", "回答错误", "回答超时", "无解判断正确", "无解判断错误"
     };
 
     for (int i = 0; i < ROUND_COUNT; ++i) {
-        int ry = 164 + i * 46;
-        char buf[64];
-
+        int ry = 400 + i * 48;
         snprintf(buf, sizeof(buf), "第 %d 题", i + 1);
-        tx(dc, buf, 150, ry, 120, 46, F_BODY, COL_TEXT,
-           DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        tx(dc, buf, CX[0], ry, 120, 44, F_BODY, P_INK, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
         COLORREF c = (g.roundRes[i] == RES_RIGHT || g.roundRes[i] == RES_NOANS_OK)
-                   ? COL_GREEN : COL_RED;
-        tx(dc, RESNAME[g.roundRes[i]], 320, ry, 220, 46, F_BODY, c,
+                   ? RGB(24, 130, 78) : RGB(196, 54, 66);
+        tx(dc, RESNAME[g.roundRes[i]], CX[1], ry, 240, 44, F_BODY, c,
            DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
         snprintf(buf, sizeof(buf), "%.1f 秒", g.roundMs[i] / 1000.0);
-        tx(dc, buf, 560, ry, 160, 46, F_BODY, COL_TEXT,
+        tx(dc, buf, CX[2], ry, 160, 44, F_BODY, P_INK,
            DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
         snprintf(buf, sizeof(buf), "%d 分", g.roundScore[i]);
-        tx(dc, buf, 760, ry, 160, 46, F_MONO, COL_TEXT,
+        tx(dc, buf, CX[3], ry, 120, 44, F_NUM_M, P_INK,
            DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        hline(dc, 180, ry + 44, 920, RGB(214, 210, 202), 1);
     }
 
-    /* 总分 */
-    roundFill(dc, 120, 336, DES_W - 240, 130, 12, COL_PANEL, COL_GOLD, 2);
-
-    char buf[160];
-    tx(dc, "总  分", 160, 352, 160, 40, F_BODY, COL_DIM,
-       DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-
-    snprintf(buf, sizeof(buf), "%d", g.totalScore);
-    tx(dc, buf, 160, 384, 360, 66, F_TITLE, COL_GOLD_L,
-       DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-
-    tx(dc, "分", 248, 410, 60, 34, F_BODY, COL_GOLD,
-       DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-
-    snprintf(buf, sizeof(buf), "难度  %s", d.name);
-    tx(dc, buf, 600, 352, 260, 34, F_BODY, COL_TEXT,
-       DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-
-    snprintf(buf, sizeof(buf), "累计用时  %.1f 秒", g.totalMs / 1000.0);
-    tx(dc, buf, 600, 388, 300, 34, F_BODY, COL_TEXT,
-       DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-
-    if (g.rankPos > 0) {
-        snprintf(buf, sizeof(buf), "★  当前排名第 %d 名", g.rankPos);
-        tx(dc, buf, 600, 424, 300, 34, F_BODY, COL_GOLD_L,
-           DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-    } else {
-        tx(dc, "本局未得分，成绩不记入排行榜", 600, 424, 320, 34, F_BODY_S,
-           COL_DIM, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-    }
-
-    /* 名次提示条 */
-    if (g.newBest && g.rankPos > 0) {
-        roundFill(dc, 300, 490, 440, 46, 8, COL_PANEL2, COL_GOLD, 1);
-        tx(dc, "★  刷新了你的个人最好成绩", 300, 490, 440, 46, F_BODY, COL_GOLD_L,
-           DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    } else if (g.rankPos > 0) {
-        roundFill(dc, 300, 490, 440, 46, 8, COL_PANEL2, COL_LINE, 1);
-        tx(dc, "未超过你的历史最好成绩，榜上保留原成绩",
-           300, 490, 440, 46, F_BODY_S, COL_DIM,
-           DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    }
+    drawFooter(dc, "成绩已写入排行榜  //  RANK SAVED", "ESC 返回");
 }
 
-/*====================== 十五、总绘制入口 ======================*/
+/*====================== 十七、总绘制入口 ======================*/
 
-/* 绘制整块画布：坐标系原点固定在 (0,0)，把 1040x700 的设计尺寸
- * 映射到 w x h 像素。调用方负责居中与贴图。 */
 static void drawCanvas(HDC dc, int w, int h)
 {
     if (w < 1) w = 1;
@@ -1716,7 +2430,7 @@ static void drawCanvas(HDC dc, int w, int h)
 
     switch (g.screen) {
     case SCR_MENU:    drawMenuScreen(dc);       break;
-    case SCR_DIFF:    drawDifficultyScreen(dc); break;
+    case SCR_DIFF:    drawDiffScreen(dc);       break;
     case SCR_RULES:   drawRulesScreen(dc);      break;
     case SCR_RANK:    drawRankScreen(dc);       break;
     case SCR_NAME:    drawNameScreen(dc);       break;
@@ -1726,17 +2440,12 @@ static void drawCanvas(HDC dc, int w, int h)
 
     drawAllButtons(dc);
 
-    /* 底部状态条：内容不随时间变化，否则局部刷新时会对不上 */
-    const Difficulty &d = LEVELS[g.diff];
-    char right[128];
-    snprintf(right, sizeof(right), "当前难度 %s    单题满分 %d 分",
-             d.name, d.baseScore + d.bonusScore);
-    drawStatusBar(dc, "就绪", right);
-
     SetMapMode(dc, om);
 }
 
-/*====================== 十六、窗口重绘 ======================*/
+
+
+/*====================== 十八、窗口重绘 ======================*/
 
 static void repaint()
 {
@@ -1771,7 +2480,7 @@ static void repaintDesignRect(int dx, int dy, int dw, int dh)
 
 /*
  * 双缓冲位图缓存。答题时定时器每 40 毫秒就要重绘一次，
- * 如果每次都新建/销毁 1500x1000 级别的位图既费 CPU 又容易产生可见的顿挫，
+ * 如果每次都新建/销毁 1280x800 级别的位图既费 CPU 又容易产生可见的顿挫，
  * 因此这里只在画布尺寸变化时才重建位图。
  */
 static HDC     g_memDC  = NULL;
@@ -1817,7 +2526,7 @@ static HDC getMemCanvas(HDC ref, int w, int h)
     return g_memDC;
 }
 
-/*====================== 十七、对局流程 ======================*/
+/*====================== 十九、对局流程 ======================*/
 
 static void layoutEdit();          /* 前置声明：按当前窗口尺寸摆放输入框 */
 
@@ -1872,9 +2581,8 @@ static void newRound(bool forceSolvable, bool forceUnsolvable)
     if (g_edit != NULL) {
         SetWindowTextA(g_edit, "");
         EnableWindow(g_edit, TRUE);
-        ShowWindow(g_edit, SW_SHOW);
+        ShowWindow(g_edit, SW_HIDE);        /* 发完牌再出现，先显示“正在发牌” */
         layoutEdit();
-        SetFocus(g_edit);
     }
 
     SetTimer(g_hwnd, 1, 60, NULL);
@@ -2039,7 +2747,7 @@ static void doNext()
     newRound(false, rand() % 3 == 0);
 }
 
-/*====================== 十八、输入框子类化 ======================*/
+/*====================== 二十、输入框子类化 ======================*/
 
 #define WM_APP_SUBMIT (WM_APP + 1)
 
@@ -2048,6 +2756,14 @@ static LRESULT CALLBACK EditProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     if (msg == WM_KEYDOWN) {
         if (wp == VK_RETURN) {
             PostMessageA(g_hwnd, WM_APP_SUBMIT, 0, 0);
+            return 0;
+        }
+        if (wp == VK_ESCAPE) {              /* 输入框里按 Esc 也能返回 */
+            PostMessageA(g_hwnd, WM_KEYDOWN, VK_ESCAPE, 0);
+            return 0;
+        }
+        if (wp == 'M' || wp == 'm') {       /* 输入框里也能静音 */
+            PostMessageA(g_hwnd, WM_KEYDOWN, 'M', 0);
             return 0;
         }
     }
@@ -2068,6 +2784,7 @@ static void createEdit()
 
     SendMessageA(g_edit, WM_SETFONT, (WPARAM)F_EDIT, TRUE);
     SendMessageA(g_edit, EM_SETLIMITTEXT, 200, 0);
+    SendMessageA(g_edit, EM_SETMARGINS, 3, (8 | (8 << 16)));   /* 左右留白 */
     g_editOld = (WNDPROC)SetWindowLongPtrA(g_edit, GWLP_WNDPROC,
                                            (LONG_PTR)EditProc);
 
@@ -2099,8 +2816,8 @@ static void layoutEdit()
     if (ox < 0) ox = 0;
     if (oy < 0) oy = 0;
 
-    int ex = 164, ey = 316, ew = 400, eh = 50;   /* 默认：对局输入框 */
-    if (g.screen == SCR_NAME) { ex = 330; ey = 222; ew = 380; eh = 48; }
+    int ex = 306, ey = 522, ew = 448, eh = 36;   /* 默认：对局输入框 */
+    if (g.screen == SCR_NAME) { ex = 422; ey = 310; ew = 436; eh = 36; }
 
     MoveWindow(g_edit,
                ox + (int)(ex * s), oy + (int)(ey * s),
@@ -2109,13 +2826,15 @@ static void layoutEdit()
     /* 输入框挪走后，它原来盖住的地方要重画一次 */
     repaint();
 }
-/*====================== 十九、命令分派 ======================*/
+/*====================== 二十一、命令分派 ======================*/
 
 static void enterScreen(int screen)
 {
     g.screen = screen;
     g_hover  = 0;
     g_press  = 0;
+    g_hoverSlot = -1;
+    g_pressSlot = -1;
 
     if (screen == SCR_GAME || screen == SCR_NAME) createEdit();
     else                                          destroyEdit();
@@ -2160,13 +2879,21 @@ static void doNameOk()
     if (buf[0] == '\0') strcpy(g.player, "玩家");
     else                strcpy(g.player, buf);
 
+    if (g_nameFromMenu) {                 /* 从「玩家档案」进来：只改名 */
+        g_nameFromMenu = false;
+        enterScreen(SCR_MENU);
+        return;
+    }
+
     beginNewGame();
 }
 
-/* 主菜单点「开始游戏」：先来一声“叮叮叮”，没输过名字再问名字 */
+/* 主菜单点「开始对局」：先来一声“叮叮叮”，没输过名字再问名字 */
 static void startGameFlow()
 {
     playSfx(SND_DING);
+
+    g_nameFromMenu = false;
 
     if (g.player[0] == '\0') {
         enterScreen(SCR_NAME);
@@ -2177,6 +2904,35 @@ static void startGameFlow()
     } else {
         beginNewGame();
     }
+}
+
+static void toggleSound()
+{
+    g_sfxOn = !g_sfxOn;
+
+    if (g_sfxOn) {
+        if (g.screen == SCR_GAME) startBgm();
+    } else {
+        stopSfx();
+        stopBgm();
+    }
+
+    HMENU menu = GetMenu(g_hwnd);
+    if (menu != NULL)
+        CheckMenuItem(menu, CMD_SFX, g_sfxOn ? MF_CHECKED : MF_UNCHECKED);
+
+    repaint();
+}
+
+static void showAbout()
+{
+    MessageBoxA(g_hwnd,
+                "计算二十四点  ·  界园终端\n\n"
+                "Windows 图形界面版（Win32 API + GDI 自绘，无第三方库）\n"
+                "随机发牌 · 限时挑战 · 精确分数运算 · 排行榜 · 语音音效\n\n"
+                "界面主题：深色金属背景 / 米白终端纸面 / 品红徽记\n\n"
+                "南京邮电大学  程序设计课程设计",
+                "关 于  界园终端", MB_OK | MB_ICONINFORMATION);
 }
 
 static void doCommand(int id)
@@ -2193,14 +2949,26 @@ static void doCommand(int id)
         break;
 
     case ID_M_RANK:
+    case ID_I_RANK:
     case CMD_RANK:
         g.recCount = loadRecords(g.recs, MAX_RECORDS);
         enterScreen(SCR_RANK);
         break;
 
     case ID_M_RULES:
+    case ID_I_RULES:
     case CMD_RULES:
         enterScreen(SCR_RULES);
+        break;
+
+    case ID_M_NAME:
+    case ID_I_NAME:
+        g_nameFromMenu = true;
+        enterScreen(SCR_NAME);
+        if (g_edit != NULL) {
+            SetWindowTextA(g_edit, g.player);
+            SetFocus(g_edit);
+        }
         break;
 
     case ID_M_EXIT:
@@ -2208,25 +2976,19 @@ static void doCommand(int id)
         DestroyWindow(g_hwnd);
         break;
 
+    case ID_M_ABOUT:
     case CMD_ABOUT:
-        MessageBoxA(g_hwnd,
-                    "计算二十四点  ·  24 Point Game\n\n"
-                    "Windows 图形界面版（Win32 API + GDI 自绘）\n"
-                    "随机发牌 · 限时挑战 · 精确分数运算 · 排行榜 · 语音音效\n\n"
-                    "南京邮电大学  程序设计课程设计",
-                    "关 于", MB_OK | MB_ICONINFORMATION);
+        showAbout();
         break;
 
+    case ID_M_SFX:
+    case ID_I_SFX:
     case CMD_SFX:
-        g_sfxOn = !g_sfxOn;
-        if (g_sfxOn) {
-            if (g.screen == SCR_GAME) startBgm();
-        } else {
-            stopSfx();
-            stopBgm();
-        }
-        CheckMenuItem(GetMenu(g_hwnd), CMD_SFX,
-                      g_sfxOn ? MF_CHECKED : MF_UNCHECKED);
+        toggleSound();
+        break;
+
+    case ID_D_OK:
+        enterScreen(SCR_MENU);
         break;
 
     case ID_D_0:
@@ -2248,10 +3010,16 @@ static void doCommand(int id)
 
     case ID_N_SKIP:
         strcpy(g.player, "玩家");
-        beginNewGame();
+        if (g_nameFromMenu) {
+            g_nameFromMenu = false;
+            enterScreen(SCR_MENU);
+        } else {
+            beginNewGame();
+        }
         break;
 
     case ID_N_BACK:
+        g_nameFromMenu = false;
         enterScreen(SCR_MENU);
         break;
 
@@ -2269,6 +3037,7 @@ static void doCommand(int id)
         break;
 
     case ID_G_BACK:
+    case ID_G_BACK2:
         stopTimer();
         stopBgm();
         destroyEdit();
@@ -2280,18 +3049,20 @@ static void doCommand(int id)
         break;
 
     case ID_S_RANK:
+        stopBgm();
         g.recCount = loadRecords(g.recs, MAX_RECORDS);
         enterScreen(SCR_RANK);
         break;
 
     case ID_S_MENU:
+    case ID_S_BACK:
         stopBgm();
         enterScreen(SCR_MENU);
         break;
     }
 }
 
-/*====================== 二十、窗口过程 ======================*/
+/*====================== 二十二、窗口过程 ======================*/
 
 /* 把客户区像素坐标换算成设计坐标（考虑居中偏移与缩放） */
 static void clientToDesign(int px, int py, int &dx, int &dy)
@@ -2316,17 +3087,20 @@ static void onMouseMove(int x, int y)
     int n = 0;
     const BtnDesc *bs = curButtons(n);
     int hit = 0;
+    int slot = -1;
 
     for (int i = 0; i < n; ++i) {
         if (x >= bs[i].x && x < bs[i].x + bs[i].w &&
             y >= bs[i].y && y < bs[i].y + bs[i].h) {
             hit = bs[i].id;
+            slot = i;
             break;
         }
     }
 
-    if (hit != g_hover) {
+    if (hit != g_hover || slot != g_hoverSlot) {
         g_hover = hit;
+        g_hoverSlot = slot;
         repaint();
     }
 }
@@ -2340,11 +3114,13 @@ static void onLButtonDown(int x, int y)
         if (x >= bs[i].x && x < bs[i].x + bs[i].w &&
             y >= bs[i].y && y < bs[i].y + bs[i].h) {
             g_press = bs[i].id;
+            g_pressSlot = i;
             repaint();
             return;
         }
     }
     g_press = 0;
+    g_pressSlot = -1;
 }
 
 static void onLButtonUp(int x, int y)
@@ -2362,15 +3138,33 @@ static void onLButtonUp(int x, int y)
     }
 
     int pressed = g_press;
+    int pressedSlot = g_pressSlot;
     g_press = 0;
+    g_pressSlot = -1;
 
-    if (id != 0 && id == pressed) doCommand(id);
+    if (id != 0 && id == pressed && pressedSlot >= 0) doCommand(id);
     else repaint();
 }
 
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg) {
+    case WM_KEYDOWN:
+        if (wp == 'M' || wp == 'm') { toggleSound(); return 0; }
+        if (wp == VK_ESCAPE) {
+            if (g.screen == SCR_GAME || g.screen == SCR_SUMMARY) {
+                stopTimer();
+                stopBgm();
+                destroyEdit();
+                enterScreen(SCR_MENU);
+            } else if (g.screen != SCR_MENU) {
+                g_nameFromMenu = false;
+                enterScreen(SCR_MENU);
+            }
+            return 0;
+        }
+        break;
+
     case WM_CREATE:
         g_hwnd = hwnd;
         g.recCount = loadRecords(g.recs, MAX_RECORDS);
@@ -2452,6 +3246,10 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             if (now - g.animTick >= 90) {
                 g.animTick = now;
                 g.dealt++;
+                if (g.dealt >= CARD_COUNT && g_edit != NULL) {
+                    ShowWindow(g_edit, SW_SHOW);
+                    SetFocus(g_edit);
+                }
             }
             repaint();
             return 0;
@@ -2472,9 +3270,8 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
                     playSfx(SND_HURRY);
                 }
 
-                /* 先把倒计时条刷成新长度，再只失效这一小块，
-                 * 不去动牌面和其它区域，避免整屏重绘带来的“黑一下”。 */
-                repaintDesignRect(224, 58, 718, 38);
+                /* 只失效倒计时这一条，避免整屏重绘 */
+                repaintDesignRect(28, 84, 1224, 64);
             }
 
             if (remain == 0) {
@@ -2526,15 +3323,15 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
     case WM_GETMINMAXINFO: {
         MINMAXINFO *mm = (MINMAXINFO *)lp;
-        mm->ptMinTrackSize.x = 900;
-        mm->ptMinTrackSize.y = 680;
+        mm->ptMinTrackSize.x = 1000;
+        mm->ptMinTrackSize.y = 700;
         return 0;
     }
 
     case WM_CTLCOLOREDIT: {
         HDC dc = (HDC)wp;
-        SetTextColor(dc, COL_GOLD_L);
-        SetBkColor(dc, COL_PANEL2);
+        SetTextColor(dc, P_INK);
+        SetBkColor(dc, P_WHITE);
         return (LRESULT)g_brEdit;
     }
 
@@ -2549,7 +3346,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcA(hwnd, msg, wp, lp);
 }
 
-/*====================== 二十一、资源初始化 ======================*/
+/*====================== 二十三、资源初始化 ======================*/
 
 static HFONT mkFont(int h, int weight, const char *face)
 {
@@ -2560,16 +3357,23 @@ static HFONT mkFont(int h, int weight, const char *face)
 
 static void initFonts()
 {
-    F_TITLE  = mkFont(46, FW_SEMIBOLD, "微软雅黑");
-    F_SUB    = mkFont(18, FW_NORMAL,   "微软雅黑");
-    F_H1     = mkFont(26, FW_SEMIBOLD, "微软雅黑");
-    F_H2     = mkFont(22, FW_SEMIBOLD, "微软雅黑");
-    F_BODY   = mkFont(17, FW_NORMAL,   "微软雅黑");
-    F_BODY_S = mkFont(15, FW_NORMAL,   "微软雅黑");
-    F_BTN    = mkFont(19, FW_SEMIBOLD, "微软雅黑");
-    F_RANK   = mkFont(30, FW_BOLD,     "微软雅黑");
-    F_RANK_B = mkFont(52, FW_BOLD,     "微软雅黑");
-    F_MONO   = mkFont(24, FW_BOLD,     "Consolas");
+    F_HERO     = mkFont(40, FW_SEMIBOLD, "微软雅黑");
+    F_H1       = mkFont(32, FW_SEMIBOLD, "微软雅黑");
+    F_H2       = mkFont(26, FW_SEMIBOLD, "微软雅黑");
+    F_H3       = mkFont(20, FW_SEMIBOLD, "微软雅黑");
+    F_BODY     = mkFont(16, FW_NORMAL,   "微软雅黑");
+    F_SMALL    = mkFont(12, FW_NORMAL,   "微软雅黑");
+    F_TINY     = mkFont(10, FW_NORMAL,   "微软雅黑");
+    F_CAP      = mkFont(10, FW_SEMIBOLD, "Bahnschrift");
+    F_NUM      = mkFont(22, FW_NORMAL,   "Bahnschrift");
+    F_NUM_M    = mkFont(26, FW_SEMIBOLD, "Bahnschrift");
+    F_NUM_L    = mkFont(38, FW_SEMIBOLD, "Bahnschrift");
+    F_NUM_XL   = mkFont(64, FW_SEMIBOLD, "Bahnschrift");
+    F_NUM_XXL  = mkFont(104, FW_BOLD,    "Bahnschrift");
+    F_CARD_NUM = mkFont(76, FW_BOLD,     "Bahnschrift");
+    F_VERT     = mkFont(48, FW_SEMIBOLD, "微软雅黑");
+    F_WATER    = mkFont(250, FW_BOLD,    "Bahnschrift");
+    F_MONO     = mkFont(24, FW_BOLD,     "Consolas");
 
     F_SUIT_S = CreateFontW(-26, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                            DEFAULT_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
@@ -2584,18 +3388,19 @@ static void initFonts()
                            CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
                            L"Segoe UI Symbol");
 
-    F_EDIT = CreateFontA(-24, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+    F_EDIT = CreateFontA(-26, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
                          DEFAULT_CHARSET, OUT_TT_PRECIS, CLIP_DEFAULT_PRECIS,
                          CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE,
                          "Consolas");
 
-    g_brEdit = CreateSolidBrush(COL_PANEL2);
+    g_brEdit = CreateSolidBrush(P_WHITE);
 }
 
 static void freeFonts()
 {
-    HFONT *f[] = { &F_TITLE, &F_SUB, &F_H1, &F_H2, &F_BODY, &F_BODY_S,
-                   &F_BTN, &F_RANK, &F_RANK_B, &F_MONO, &F_EDIT,
+    HFONT *f[] = { &F_HERO, &F_H1, &F_H2, &F_H3, &F_BODY, &F_SMALL, &F_TINY,
+                   &F_CAP, &F_NUM, &F_NUM_M, &F_NUM_L, &F_NUM_XL, &F_NUM_XXL,
+                   &F_CARD_NUM, &F_VERT, &F_WATER, &F_MONO, &F_EDIT,
                    &F_SUIT_S, &F_SUIT_M, &F_SUIT_L };
     for (int i = 0; i < (int)(sizeof(f) / sizeof(f[0])); ++i) {
         if (*f[i] != NULL) { DeleteObject(*f[i]); *f[i] = NULL; }
@@ -2611,9 +3416,14 @@ static void resetState()
     g.fbColor  = COL_TEXT;
     g.dealt    = 4;
     g.subState = GS_INPUT;
+    g_hover    = 0;
+    g_press    = 0;
+    g_hoverSlot = -1;
+    g_pressSlot = -1;
+    g_nameFromMenu = false;
 }
 
-/*====================== 二十二、界面截图导出 ======================*/
+/*====================== 二十四、界面截图导出 ======================*/
 
 static bool saveBmp(HDC refDC, int w, int h, const char *path)
 {
@@ -2776,7 +3586,7 @@ static void exportShots()
     ReleaseDC(NULL, screen);
 }
 
-/*====================== 二十三、程序自检 ======================*/
+/*====================== 二十五、程序自检 ======================*/
 
 static int  g_pass = 0;
 static int  g_fail = 0;
@@ -2918,31 +3728,7 @@ static int runSelfTest()
     return (g_fail == 0) ? 0 : 1;
 }
 
-/*====================== 二十四、程序入口 ======================*/
-
-static void buildMenuBar(HWND hwnd)
-{
-    HMENU bar  = CreateMenu();
-    HMENU game = CreatePopupMenu();
-    HMENU help = CreatePopupMenu();
-
-    AppendMenuA(game, MF_STRING,    CMD_START, "开始新游戏(&N)");
-    AppendMenuA(game, MF_STRING,    CMD_DIFF,  "难度设置(&D)");
-    AppendMenuA(game, MF_STRING,    CMD_RANK,  "高手排行榜(&R)");
-    AppendMenuA(game, MF_SEPARATOR, 0,         NULL);
-    AppendMenuA(game, MF_STRING | MF_CHECKED, CMD_SFX, "播放声音(&S)");
-    AppendMenuA(game, MF_SEPARATOR, 0,         NULL);
-    AppendMenuA(game, MF_STRING,    CMD_EXIT,  "退出(&X)");
-
-    AppendMenuA(help, MF_STRING,    CMD_RULES, "游戏规则(&L)");
-    AppendMenuA(help, MF_SEPARATOR, 0,         NULL);
-    AppendMenuA(help, MF_STRING,    CMD_ABOUT, "关于(&A)...");
-
-    AppendMenuA(bar, MF_POPUP, (UINT_PTR)game, "游戏(&G)");
-    AppendMenuA(bar, MF_POPUP, (UINT_PTR)help, "帮助(&H)");
-
-    SetMenu(hwnd, bar);
-}
+/*====================== 二十六、程序入口 ======================*/
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdLine, int nCmdShow)
 {
@@ -3011,7 +3797,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdLine, int nCmdShow
     rc.left = 0; rc.top = 0;
     rc.right = sc(DES_W);
     rc.bottom = sc(DES_H);
-    AdjustWindowRect(&rc, style, TRUE);
+    AdjustWindowRect(&rc, style, FALSE);   /* 不使用系统菜单栏 */
 
     int winW = rc.right - rc.left;
     int winH = rc.bottom - rc.top;
@@ -3022,13 +3808,11 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdLine, int nCmdShow
     if (wx < 0) wx = 0;
 
     HWND hwnd = CreateWindowExA(
-        0, "Calc24GameWnd", "计算二十四点  ·  24 Point Game",
+        0, "Calc24GameWnd", "计算二十四点  ·  界园终端",
         style, wx, wy, winW, winH,
         NULL, NULL, hInst, NULL);
 
     if (hwnd == NULL) return 1;
-
-    buildMenuBar(hwnd);
 
     ShowWindow(hwnd, nCmdShow);
     UpdateWindow(hwnd);
@@ -3042,3 +3826,24 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdLine, int nCmdShow
     freeFonts();
     return (int)m.wParam;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

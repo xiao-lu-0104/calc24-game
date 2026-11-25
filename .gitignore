@@ -6,6 +6,10 @@ rank.txt
 # 编译中间产物
 *.o
 *.obj
+.build-tmp/
+
+# --shots 导出的原始 BMP（处理后的 PNG 在 doc/screenshots）
+gui_*.bmp
 
 # 运行 / 调试输出
 *.log

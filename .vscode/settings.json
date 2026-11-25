@@ -1,0 +1,8 @@
+{
+  // 源码是 GBK 编码，自动猜测可以避免中文注释乱码；
+  // 若仍然显示乱码：右键文件 → Reopen with Encoding → GBK
+  // ★ 千万不要把 src\*.cpp / *.c++ 另存为 UTF-8，会破坏中文字符串
+  "files.autoGuessEncoding": true,
+  "files.trimTrailingWhitespace": false,
+  "files.insertFinalNewline": false
+}
