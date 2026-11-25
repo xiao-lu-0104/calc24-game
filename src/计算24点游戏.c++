@@ -1421,9 +1421,7 @@ struct BtnDesc {
 };
 
 static const BtnDesc BTN_MENU[] = {
-    { 700, 128, 380, 192, ID_M_START,  7, "" },   /* 主视觉：开始对局   */
-    { 1096, 128, 152,  88, ID_M_RANK,   7, "" },   /* 排行榜横幅         */
-    { 1096, 228, 152,  92, ID_M_ABOUT,  7, "" },   /* 关于横幅           */
+    { 700, 128, 548, 192, ID_M_START,  7, "" },   /* 主视觉：开始对局（并入原右上角横幅区） */
     { 700, 340, 270, 152, ID_M_DIFF,   7, "" },   /* 难度设置           */
     { 978, 340, 270, 152, ID_M_NAME,   7, "" },   /* 玩家档案           */
     { 700, 508, 178,  92, ID_M_RANK,   7, "" },   /* 排行榜             */
@@ -1436,7 +1434,7 @@ static const BtnDesc BTN_MENU[] = {
     { 128, 26, 40, 40, ID_I_RANK, 8, "" },
     { 178, 26, 40, 40, ID_I_NAME, 8, "" }
 };
-static const int BTN_MENU_N = 14;
+static const int BTN_MENU_N = 12;
 
 static const BtnDesc BTN_DIFF[] = {
     { 160, 210, 300, 270, ID_D_0, 3, "" },
@@ -1510,7 +1508,7 @@ static int iconKindOfId(int id)
     switch (id) {
     case ID_I_SFX: case ID_M_SFX:   return g_sfxOn ? 6 : 7;
     case ID_I_RULES:               return 1;
-    case ID_I_RANK:                return 2;
+    case ID_I_RANK:                return 4;
     case ID_I_NAME:                return 3;
     }
     return 0;
@@ -1720,7 +1718,7 @@ static void menuLeftColumn(HDC dc)
 
     /* 音效开关 */
     paperCard(dc, 336, 674, 100, 82, 6, P_PAPER, P_INK, 1, true);
-    if (slotHover(9)) cutBorder(dc, 334, 672, 104, 86, 8, P_PINK, 2);
+    if (slotHover(7)) cutBorder(dc, 334, 672, 104, 86, 8, P_PINK, 2);
     drawIcon(dc, g_sfxOn ? 6 : 7, 386, 700, 20, P_INK);
     tx(dc, g_sfxOn ? "音效 开" : "音效 关", 336, 716, 100, 22, F_SMALL, P_INK,
        DT_CENTER | DT_VCENTER | DT_SINGLELINE);
@@ -1735,7 +1733,7 @@ static void menuLeftColumn(HDC dc)
 
 static void menuHero(HDC dc)
 {
-    const int x = 700, y = 128, w = 380, h = 192;
+    const int x = 700, y = 128, w = 548, h = 192;
     bool hover = slotHover(0);
     bool press = slotPress(0);
 
@@ -1746,7 +1744,7 @@ static void menuHero(HDC dc)
     fillRect(dc, x + 20, y + 22, 10, 10, P_PINK);
     tx(dc, "T E R M I N A L   0 1", x + 38, y + 16, 180, 18, F_CAP,
        RGB(110, 110, 110), DT_LEFT | DT_TOP);
-    emblem(dc, x + 346, y + 30, 22, P_PINK, P_PINK_D);
+    emblem(dc, x + 514, y + 30, 22, P_PINK, P_PINK_D);
 
     tx(dc, "24", x + 20, y + 30, 170, 120, F_NUM_XXL, P_INK, DT_LEFT | DT_TOP);
 
@@ -1777,26 +1775,7 @@ static void menuHero(HDC dc)
     fillRect(dc, x, y + h - 34, w, 34, P_INK);
     tx(dc, "点击进入终端", x + 18, y + h - 34, 280, 34, F_SMALL, P_WHITE,
        DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-    drawIcon(dc, 9, x + 344, y + h - 17, 20, P_PINK);
-}
-
-static void menuBanner(HDC dc, int x, int y, int w, int h,
-                       const char *title, const char *en,
-                       COLORREF c1, COLORREF c2, int iconKind, bool hover)
-{
-    cutFill(dc, x + 5, y + 5, w, h, 6, RGB(9, 12, 16));
-    cutFill(dc, x, y, w, h, 6, c1);
-    cutBorder(dc, x, y, w, h, 6, hover ? P_PINK : RGB(150, 166, 182), hover ? 2 : 1);
-
-    POINT deco[3] = { { x + w - 58, y }, { x + w, y }, { x + w, y + 58 } };
-    polySolid(dc, deco, 3, c2);
-
-    tx(dc, title, x + 14, y + 11, w - 28, 30, F_H2, P_WHITE,
-       DT_LEFT | DT_TOP);
-    tx(dc, en, x + 15, y + 44, w - 30, 16, F_CAP, RGB(198, 210, 222),
-       DT_LEFT | DT_TOP);
-    drawIcon(dc, iconKind, x + w - 28, y + h - 28, 20, RGB(222, 230, 238));
-    hline(dc, x + 14, y + h - 12, w - 58, P_PINK, 2);
+    drawIcon(dc, 9, x + 512, y + h - 17, 20, P_PINK);
 }
 
 static void menuGrid(HDC dc)
@@ -1805,7 +1784,7 @@ static void menuGrid(HDC dc)
     {
         const int x = 700, y = 340, w = 270, h = 152;
         paperCard(dc, x, y, w, h, 10, P_PAPER, P_INK, 2, true);
-        if (slotHover(3)) cutBorder(dc, x - 2, y - 2, w + 4, h + 4, 12, P_PINK, 2);
+        if (slotHover(1)) cutBorder(dc, x - 2, y - 2, w + 4, h + 4, 12, P_PINK, 2);
         tx(dc, "难度设置", x + 18, y + 6, 200, 44, F_H1, P_INK, DT_LEFT | DT_TOP);
         tx(dc, "D I F F I C U L T Y", x + 20, y + 50, 180, 16, F_CAP,
            RGB(110, 110, 110), DT_LEFT | DT_TOP);
@@ -1844,7 +1823,7 @@ static void menuGrid(HDC dc)
     {
         const int x = 978, y = 340, w = 270, h = 152;
         paperCard(dc, x, y, w, h, 10, P_PAPER, P_INK, 2, true);
-        if (slotHover(4)) cutBorder(dc, x - 2, y - 2, w + 4, h + 4, 12, P_PINK, 2);
+        if (slotHover(2)) cutBorder(dc, x - 2, y - 2, w + 4, h + 4, 12, P_PINK, 2);
         tx(dc, "玩家档案", x + 18, y + 6, 200, 44, F_H1, P_INK, DT_LEFT | DT_TOP);
         tx(dc, "P L A Y E R", x + 20, y + 50, 140, 16, F_CAP,
            RGB(110, 110, 110), DT_LEFT | DT_TOP);
@@ -1862,7 +1841,7 @@ static void menuGrid(HDC dc)
         const int x = 700, y = 508, w = 178, h = 92;
         cutFill(dc, x + 5, y + 5, w, h, 8, RGB(9, 12, 16));
         cutFill(dc, x, y, w, h, 8, P_PINK);
-        if (slotHover(5)) cutBorder(dc, x - 2, y - 2, w + 4, h + 4, 10, P_WHITE, 2);
+        if (slotHover(3)) cutBorder(dc, x - 2, y - 2, w + 4, h + 4, 10, P_WHITE, 2);
         tx(dc, "排行榜", x + 16, y + 10, 140, 34, F_H2, P_WHITE, DT_LEFT | DT_TOP);
         tx(dc, "R A N K I N G", x + 17, y + 46, 140, 16, F_CAP,
            RGB(240, 220, 228), DT_LEFT | DT_TOP);
@@ -1875,7 +1854,7 @@ static void menuGrid(HDC dc)
     {
         const int x = 884, y = 508, w = 178, h = 92;
         paperCard(dc, x, y, w, h, 8, P_PAPER, P_INK, 1, true);
-        if (slotHover(6)) cutBorder(dc, x - 2, y - 2, w + 4, h + 4, 10, P_PINK, 2);
+        if (slotHover(4)) cutBorder(dc, x - 2, y - 2, w + 4, h + 4, 10, P_PINK, 2);
         tx(dc, "游戏规则", x + 16, y + 10, 150, 34, F_H2, P_INK, DT_LEFT | DT_TOP);
         tx(dc, "R U L E S", x + 17, y + 46, 140, 16, F_CAP,
            RGB(110, 110, 110), DT_LEFT | DT_TOP);
@@ -1888,8 +1867,8 @@ static void menuGrid(HDC dc)
         const int x = 1068, y = 508, w = 178, h = 92;
         cutFill(dc, x + 5, y + 5, w, h, 8, RGB(9, 12, 16));
         cutFill(dc, x, y, w, h, 8, RGB(24, 27, 33));
-        cutBorder(dc, x, y, w, h, 8, slotHover(7) ? P_PINK : RGB(150, 120, 132),
-                  slotHover(7) ? 2 : 1);
+        cutBorder(dc, x, y, w, h, 8, slotHover(5) ? P_PINK : RGB(150, 120, 132),
+                  slotHover(5) ? 2 : 1);
         tx(dc, "退出", x + 16, y + 10, 120, 34, F_H2, P_WHITE, DT_LEFT | DT_TOP);
         tx(dc, "Q U I T", x + 17, y + 46, 120, 16, F_CAP, RGB(196, 202, 210),
            DT_LEFT | DT_TOP);
@@ -1915,7 +1894,7 @@ static void menuGrid(HDC dc)
     {
         const int x = 978, y = 616, w = 270, h = 112;
         paperCard(dc, x, y, w, h, 10, P_PAPER, P_INK, 2, true);
-        if (slotHover(8)) cutBorder(dc, x - 2, y - 2, w + 4, h + 4, 12, P_PINK, 2);
+        if (slotHover(6)) cutBorder(dc, x - 2, y - 2, w + 4, h + 4, 12, P_PINK, 2);
         tx(dc, "关于", x + 18, y + 8, 150, 34, F_H2, P_INK, DT_LEFT | DT_TOP);
         tx(dc, "A B O U T", x + 20, y + 46, 120, 16, F_CAP,
            RGB(110, 110, 110), DT_LEFT | DT_TOP);
@@ -1929,8 +1908,8 @@ static void menuTooltip(HDC dc)
 {
     static const char *TIP[4] = { "音效", "规则", "排行", "档案" };
 
-    if (g_hoverSlot >= 10 && g_hoverSlot <= 13) {
-        int i = g_hoverSlot - 10;
+    if (g_hoverSlot >= 8 && g_hoverSlot <= 11) {
+        int i = g_hoverSlot - 8;
         int x = 28 + i * 50 - 20;
         fillRect(dc, x, 72, 64, 24, RGB(18, 21, 26));
         hline(dc, x, 72, 64, P_PINK, 2);
@@ -1946,10 +1925,6 @@ static void drawMenuScreen(HDC dc)
     menuLeftColumn(dc);
 
     menuHero(dc);
-    menuBanner(dc, 1096, 128, 152,  88, "排行榜", "R A N K I N G",
-               RGB(34, 56, 82), RGB(20, 32, 48), 4, slotHover(1));
-    menuBanner(dc, 1096, 228, 152,  92, "关于", "A B O U T",
-               RGB(86, 30, 38), RGB(46, 18, 22), 5, slotHover(2));
 
     menuGrid(dc);
     menuTooltip(dc);
