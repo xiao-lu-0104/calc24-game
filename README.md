@@ -1,12 +1,14 @@
 # 计算 24 点游戏 · 24 Point Game
 
+**简体中文** | [English](README.en.md)
+
 南京邮电大学《程序设计（上机）》课程设计作品。
 
 一个纯 Win32 API + GDI 自绘的 Windows 桌面小游戏：随机发 4 张扑克牌（点数 1~10），
 玩家在限时内输入四则运算表达式，使结果等于 24。
 
-界面主题为「界园终端」（CALC-24 TERMINAL V2.0）：深蓝灰底 + 米白切角卡片 + 品红强调，
-所有卡片、扑克牌、进度条、按钮、条形码均由 GDI 手绘。
+界面主题为「界园终端」（CALC-24 TERMINAL V2.0）：粉色渐变打底、半透明樱花山水背景、
+米白切角卡片与品红强调色，所有卡片、扑克牌、进度条、按钮、条形码均由 GDI 手绘。
 
 ![主菜单](doc/screenshots/menu.png)
 
@@ -120,7 +122,8 @@ VS Code 默认用 clangd 提供 C/C++ 提示，而 clangd 自带的是 MSVC 头�
 ├── doc\
 │   ├── 使用说明.txt       详细使用说明与答辩要点
 │   └── screenshots\       界面截图
-├── README.md
+├── README.md            中文说明（本文件）
+├── README.en.md         English version
 └── .gitignore
 ```
 
