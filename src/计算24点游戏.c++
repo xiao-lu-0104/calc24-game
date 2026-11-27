@@ -1,16 +1,8 @@
 /*==========================================================================
- *  计算二十四点  ——  界园终端界面版（纯 Win32 API + GDI，无第三方库）
- *
  *  编译： g++ -std=c++11 -O2 -mwindows -o 计算24点游戏.exe 计算24点游戏.cpp -lgdi32 -lwinmm
- *
  *  功能：随机发 4 张扑克牌，玩家在限时内输入四则运算表达式使其结果等于 24；
  *        三题一局，按难度与剩余时间记分，成绩存入排行榜文件。
  *        声音用 MCI 播放 音频\ 子目录下的 mp3 素材。
- *
- *  界面：参考《明日方舟》主界面（界园主题）重构：
- *        深色金属背景 + 米白终端纸面卡片 + 黑字 + 品红“24”放射徽记；
- *        左上图标、右上资源、右侧主视觉与分类卡片、左下对白与战报。
- *        所有按钮保留原有功能，仅调整位置与视觉；Esc 可返回主菜单。
  *========================================================================*/
 
 #define WIN32_LEAN_AND_MEAN
@@ -94,11 +86,9 @@ enum { GS_INPUT = 0, GS_RESULT };
 /* 本题判定结果 */
 enum { RES_RIGHT = 0, RES_WRONG, RES_TIMEOUT, RES_NOANS_OK, RES_NOANS_BAD };
 
-/*====================== 二、界园终端主题配色 ======================*/
-/* 深色金属背景 + 米白终端面板 + 黑字 + 品红点缀（明日方舟 / 界园风格） */
+/*====================== 二、终端主题配色 ======================*/
+/* 卡面与控件用色：米白底色、深色文字和品红强调色 */
 
-static const COLORREF P_BG_TOP  = RGB( 39,  47,  56);   /* 背景上沿         */
-static const COLORREF P_BG_BOT  = RGB( 13,  16,  21);   /* 背景下沿         */
 static const COLORREF P_PAPER   = RGB(245, 243, 238);   /* 终端纸面         */
 static const COLORREF P_PAPER2  = RGB(230, 226, 217);   /* 纸面次级         */
 static const COLORREF P_INK     = RGB( 22,  22,  22);   /* 墨黑             */
@@ -139,7 +129,7 @@ static HFONT  F_SUIT_S = NULL;      /* 花色 26                              */
 static HFONT  F_SUIT_M = NULL;      /* 花色 38                              */
 static HFONT  F_SUIT_L = NULL;      /* 花色 50                              */
 
-static HBRUSH g_brEdit   = NULL;    /* 输入框背景刷                         */
+static HBRUSH g_brEdit   = NULL;    /* edit field background brush */
 
 static HWND   g_hwnd     = NULL;    /* 主窗口                               */
 static HWND   g_edit     = NULL;    /* 表达式输入框                         */
@@ -1053,7 +1043,7 @@ static int insertRecord(Record list[], int &count, const Record &rec, bool &newB
 
 /*====================== 十、界面基础绘制 ======================*/
 
-/* 颜色在第二节定义：P_ 开头为“界园终端”浅色卡面主题 */
+/* 颜色在第二节定义：P_ 开头为浅色卡面主题 */
 
 static void hline(HDC dc, int x, int y, int w, COLORREF c, int t)
 {
@@ -1122,13 +1112,7 @@ static void paperCard(HDC dc, int x, int y, int w, int h, int cut,
     if (t > 0) cutBorder(dc, x, y, w, h, cut, border, t);
 }
 
-static COLORREF mixColor(COLORREF a, COLORREF b, double t)
-{
-    int r = (int)(GetRValue(a) + (GetRValue(b) - GetRValue(a)) * t + 0.5);
-    int g = (int)(GetGValue(a) + (GetGValue(b) - GetGValue(a)) * t + 0.5);
-    int bl = (int)(GetBValue(a) + (GetBValue(b) - GetBValue(a)) * t + 0.5);
-    return RGB(r, g, bl);
-}
+
 
 static void diamond(HDC dc, int cx, int cy, int r, COLORREF c, bool solid)
 {
@@ -1335,53 +1319,168 @@ static void emblem(HDC dc, int cx, int cy, int r, COLORREF col, COLORREF dark)
 
 /*====================== 十一、背景与页脚 ======================*/
 
+static COLORREF mixColor(COLORREF a, COLORREF b, double t)
+{
+    int r  = (int)(GetRValue(a) + (GetRValue(b) - GetRValue(a)) * t + 0.5);
+    int g  = (int)(GetGValue(a) + (GetGValue(b) - GetGValue(a)) * t + 0.5);
+    int bl = (int)(GetBValue(a) + (GetBValue(b) - GetBValue(a)) * t + 0.5);
+    return RGB(r, g, bl);
+}
+
+static void vGradient(HDC dc, int x, int y, int w, int h,
+                      COLORREF top, COLORREF bottom)
+{
+    if (w <= 0 || h <= 0) return;
+
+    double span = (h > 1) ? (double)(h - 1) : 1.0;
+    for (int i = 0; i < h; ++i)
+        fillRect(dc, x, y + i, w, 1, mixColor(top, bottom, i / span));
+}
+
+static void hGradient(HDC dc, int x, int y, int w, int h,
+                      COLORREF left, COLORREF right)
+{
+    if (w <= 0 || h <= 0) return;
+
+    double span = (w > 1) ? (double)(w - 1) : 1.0;
+    for (int i = 0; i < w; ++i)
+        fillRect(dc, x + i, y, 1, h, mixColor(left, right, i / span));
+}
+
+/* 斜向细纹：给色块加一层织理 */
+static void diagonalStripes(HDC dc, int x, int y, int w, int h,
+                            COLORREF c, int step)
+{
+    if (step < 4) step = 4;
+
+    int saved = SaveDC(dc);
+    IntersectClipRect(dc, x, y, x + w, y + h);
+
+    HPEN pn = CreatePen(PS_SOLID, 1, c);
+    HPEN op = (HPEN)SelectObject(dc, pn);
+    for (int i = -h; i < w + h; i += step) {
+        MoveToEx(dc, x + i, y, NULL);
+        LineTo(dc, x + i - h, y + h);
+    }
+    SelectObject(dc, op);
+    DeleteObject(pn);
+
+    RestoreDC(dc, saved);
+}
+
+/* 粉带：外侧最浓，向内快速过渡到白，同时自上而下略微加深 */
+static void pinkBand(HDC dc, int x, int y, int w, int h, bool fromLeft)
+{
+    const int SEG_X = 48;
+    const int SEG_Y = 24;
+
+    for (int j = 0; j < SEG_Y; ++j) {
+        double ty = (SEG_Y > 1) ? j / (double)(SEG_Y - 1) : 0.0;
+        COLORREF dense = mixColor(RGB(248, 112, 156), RGB(198, 40, 92), ty);
+        COLORREF loose = mixColor(RGB(255, 247, 251), RGB(255, 233, 241), ty);
+
+        int py = y + h * j / SEG_Y;
+        int ph = y + h * (j + 1) / SEG_Y - py;
+        if (ph <= 0) continue;
+
+        for (int i = 0; i < SEG_X; ++i) {
+            double tx = (i + 0.5) / SEG_X;
+            if (!fromLeft) tx = 1.0 - tx;
+            tx = pow(tx, 2.4);
+
+            int px = x + w * i / SEG_X;
+            int pw = x + w * (i + 1) / SEG_X - px;
+            if (pw <= 0) continue;
+
+            fillRect(dc, px, py, pw, ph, mixColor(dense, loose, tx));
+        }
+    }
+}
+
+/* 1280x800 的渐变版面：底色渐变 + 中央柔光 + 两侧粉带 + 上下黑带 */
+static void paintBackground(HDC dc)
+{
+    const int TOP_H  = 130;
+    const int BOT_Y  = 748;
+    const int BAND_W = 340;
+    const int BODY_H = BOT_Y - TOP_H;
+
+    /* 1. 底色：上淡粉、下纯白 */
+    vGradient(dc, 0, 0, DES_W, DES_H, RGB(255, 240, 246), P_WHITE);
+
+    /* 2. 中部横向渐变：中间最亮，向两侧轻轻加深 */
+    hGradient(dc, 0, TOP_H, DES_W / 2, BODY_H, RGB(255, 243, 248), P_WHITE);
+    hGradient(dc, DES_W / 2, TOP_H, DES_W - DES_W / 2, BODY_H,
+              P_WHITE, RGB(255, 243, 248));
+
+    /* 3. 两侧粉带：外侧浓、向内渐隐 */
+    pinkBand(dc, 0, TOP_H, BAND_W, BODY_H, true);
+    pinkBand(dc, DES_W - BAND_W, TOP_H, BAND_W, BODY_H, false);
+
+    /* 4. 白色区域铺一层极淡斜纹 */
+    diagonalStripes(dc, BAND_W, TOP_H, DES_W - 2 * BAND_W, BODY_H,
+                    RGB(253, 243, 248), 46);
+
+    /* 5. 粉带内部再叠一层亮斜纹，形成织理 */
+    diagonalStripes(dc, 0, TOP_H, BAND_W, BODY_H, RGB(255, 214, 230), 30);
+    diagonalStripes(dc, DES_W - BAND_W, TOP_H, BAND_W, BODY_H,
+                    RGB(255, 214, 230), 30);
+
+    /* 6. 上下黑带 */
+    vGradient(dc, 0, 0, DES_W, TOP_H, RGB(5, 7, 10), RGB(46, 54, 64));
+    vGradient(dc, 0, BOT_Y, DES_W, DES_H - BOT_Y, RGB(46, 54, 64), RGB(5, 7, 10));
+
+    /* 7. 黑带与内容区的交界线 */
+    hline(dc, 0, TOP_H - 2, DES_W, RGB(158, 62, 96), 2);
+    hline(dc, 0, BOT_Y, DES_W, RGB(158, 62, 96), 2);
+}
+
+/* 背景只在首次绘制时渲染一遍，之后直接贴图 */
+static HBITMAP g_bgBitmap    = NULL;
+static HDC     g_bgDC        = NULL;
+static HBITMAP g_bgOldBitmap = NULL;
+
+static void freeBackground()
+{
+    if (g_bgDC != NULL) {
+        if (g_bgOldBitmap != NULL) SelectObject(g_bgDC, g_bgOldBitmap);
+        DeleteDC(g_bgDC);
+        g_bgDC        = NULL;
+        g_bgOldBitmap = NULL;
+    }
+    if (g_bgBitmap != NULL) {
+        DeleteObject(g_bgBitmap);
+        g_bgBitmap = NULL;
+    }
+}
+
+static void buildBackground()
+{
+    HDC screen = GetDC(NULL);
+    if (screen == NULL) return;
+
+    g_bgDC     = CreateCompatibleDC(screen);
+    g_bgBitmap = CreateCompatibleBitmap(screen, DES_W, DES_H);
+    ReleaseDC(NULL, screen);
+
+    if (g_bgDC == NULL || g_bgBitmap == NULL) {
+        freeBackground();
+        return;
+    }
+
+    g_bgOldBitmap = (HBITMAP)SelectObject(g_bgDC, g_bgBitmap);
+    paintBackground(g_bgDC);
+}
+
 static void drawBackdrop(HDC dc)
 {
-    /* 纵向渐变 */
-    for (int i = 0; i < DES_H; i += 4) {
-        int hh = (i + 4 > DES_H) ? (DES_H - i) : 5;
-        fillRect(dc, 0, i, DES_W, hh, mixColor(P_BG_TOP, P_BG_BOT,
-                                               i / (double)DES_H));
+    if (g_bgDC == NULL) buildBackground();
+
+    if (g_bgDC == NULL) {
+        paintBackground(dc);
+        return;
     }
-
-    /* 斜向结构光带 */
-    POINT s1[4] = { { 300, 0 }, { 760, 0 }, { 430, DES_H }, { 0, DES_H } };
-    POINT s2[4] = { { 520, 0 }, { 660, 0 }, { 330, DES_H }, { 170, DES_H } };
-    POINT s3[5] = { { 880, 0 }, { DES_W, 0 }, { DES_W, 210 },
-                    { 760, DES_H }, { 560, DES_H } };
-    polySolid(dc, s1, 4, RGB(46, 56, 67));
-    polySolid(dc, s2, 4, RGB(53, 64, 76));
-    polySolid(dc, s3, 5, RGB(34, 42, 51));
-
-    /* 远处的桁架线 */
-    hline(dc, 0, 520, DES_W, RGB(58, 69, 81), 2);
-    hline(dc, 0, 560, DES_W, RGB(31, 38, 46), 6);
-    for (int x = 0; x < DES_W; x += 160) {
-        POINT p[2] = { { x, 0 }, { x - 90, 620 } };
-        polyOutline(dc, p, 2, RGB(44, 53, 63), 1);
-    }
-
-    /* 右上大圆环 */
-    HPEN   pn = CreatePen(PS_SOLID, 2, RGB(50, 61, 72));
-    HPEN   op = (HPEN)SelectObject(dc, pn);
-    HBRUSH ob = (HBRUSH)SelectObject(dc, GetStockObject(NULL_BRUSH));
-    Ellipse(dc, 840, -110, 1420, 470);
-    SelectObject(dc, op);
-    DeleteObject(pn);
-
-    pn = CreatePen(PS_SOLID, 1, RGB(40, 49, 59));
-    op = (HPEN)SelectObject(dc, pn);
-    Ellipse(dc, 920, -30, 1340, 390);
-    SelectObject(dc, op);
-    SelectObject(dc, ob);
-    DeleteObject(pn);
-
-    /* 底部平台与黄色栏杆 */
-    fillRect(dc, 0, 690, DES_W, DES_H - 690, RGB(15, 18, 23));
-    hline(dc, 0, 690, DES_W, RGB(64, 60, 46), 2);
-    hline(dc, 60, 676, 460, RGB(150, 126, 74), 3);
-    for (int x = 80; x < 520; x += 64)
-        vline(dc, x, 676, 30, RGB(96, 82, 52), 3);
+    BitBlt(dc, 0, 0, DES_W, DES_H, g_bgDC, 0, 0, SRCCOPY);
 }
 
 static void drawFooter(HDC dc, const char *left, const char *right)
@@ -1550,7 +1649,7 @@ static void drawButton(HDC dc, const BtnDesc &b, bool hover, bool press)
         tx(dc, b.text, x + 34, y + dy, w - 36, h, F_SMALL,
            hover ? P_PINK_D : P_INK, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     } else if (b.style == 5) {                /* 深色底上的文字按钮 */
-        COLORREF c = (press || hover) ? P_PINK : RGB(196, 202, 210);
+        COLORREF c = (press || hover) ? P_PINK : P_INK2;
         tx(dc, b.text, x, y + dy, w, h, F_BODY, c,
            DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         if (hover) hline(dc, x + w / 2 - 24, y + h - 8, 48, P_PINK, 2);
@@ -1612,7 +1711,7 @@ static void drawAllButtons(HDC dc)
     }
 }
 
-/*====================== 十四、主菜单（界园终端） ======================*/
+/*====================== 十四、主菜单 ======================*/
 
 static bool slotHover(int i) { return g_hoverSlot == i; }
 static bool slotPress(int i) { return g_pressSlot == i; }
@@ -1659,12 +1758,12 @@ static void menuLeftColumn(HDC dc)
 
     for (int i = 0; i < 4; ++i)
         tx(dc, VCH[i], 60, 130 + i * 72, 70, 72, F_VERT,
-           RGB(208, 214, 221), DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+           RGB(96, 22, 50), DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
     hline(dc, 58, 118, 70, P_PINK, 3);
-    vline(dc, 136, 132, 338, RGB(120, 128, 138), 1);
+    vline(dc, 136, 132, 338, RGB(255, 226, 238), 1);
 
-    tx(dc, "24", 140, 100, 440, 300, F_WATER, RGB(43, 52, 62),
+    tx(dc, "24", 140, 100, 440, 300, F_WATER, RGB(255, 216, 230),
        DT_LEFT | DT_TOP);
 
     /* 等级徽章 */
@@ -1688,9 +1787,9 @@ static void menuLeftColumn(HDC dc)
     tx(dc, "L V", cx - 30, cy + 22, 60, 16, F_CAP, RGB(190, 196, 203),
        DT_CENTER | DT_TOP | DT_SINGLELINE);
 
-    tx(dc, g.player[0] ? g.player : "玩家", 58, 516, 300, 42, F_HERO, P_WHITE,
-       DT_LEFT | DT_TOP | DT_SINGLELINE);
-    tx(dc, "ID: LOCAL-0001", 58, 558, 260, 18, F_CAP, RGB(150, 157, 166),
+    tx(dc, g.player[0] ? g.player : "玩家", 58, 516, 300, 42, F_HERO,
+       RGB(88, 18, 44), DT_LEFT | DT_TOP | DT_SINGLELINE);
+    tx(dc, "ID: LOCAL-0001", 58, 558, 260, 18, F_CAP, RGB(122, 28, 60),
        DT_LEFT | DT_TOP | DT_SINGLELINE);
 
     /* 对白框 */
@@ -1703,9 +1802,9 @@ static void menuLeftColumn(HDC dc)
 
     /* 最新战报 */
     cutFill(dc, 61, 679, 268, 82, 8, RGB(8, 10, 14));
-    cutFill(dc, 56, 674, 268, 82, 8, P_PINK);
+    cutFill(dc, 56, 674, 268, 82, 8, RGB(18, 15, 20));
     POINT tag[4] = { { 300, 674 }, { 324, 674 }, { 324, 756 }, { 292, 756 } };
-    polySolid(dc, tag, 4, P_PINK_D);
+    polySolid(dc, tag, 4, P_PINK);
     tx(dc, "B E S T   R E C O R D", 70, 681, 200, 14, F_CAP,
        RGB(255, 235, 242), DT_LEFT | DT_TOP);
     {
@@ -2151,7 +2250,7 @@ static void drawGameScreen(HDC dc)
 {
     const Difficulty &d = LEVELS[g.diff];
     drawBackdrop(dc);
-    tx(dc, "24", 250, 110, 500, 340, F_WATER, RGB(44, 53, 63),
+    tx(dc, "24", 250, 110, 500, 340, F_WATER, RGB(252, 226, 236),
        DT_LEFT | DT_TOP);
 
     /* 顶栏 */
@@ -2176,7 +2275,7 @@ static void drawGameScreen(HDC dc)
     int ratio = (g.limitMs > 0) ? (g.remainMs * 100 / g.limitMs) : 0;
     if (ratio < 0) ratio = 0;
     if (ratio > 100) ratio = 100;
-    fillRect(dc, 36, 118, 1208, 8, RGB(41, 48, 57));
+    fillRect(dc, 36, 118, 1208, 8, RGB(58, 66, 76));
     if (ratio > 0) {
         COLORREF barC = P_PINK;
         if (ratio <= 25) barC = RGB(220, 70, 82);
@@ -2187,7 +2286,7 @@ static void drawGameScreen(HDC dc)
         vline(dc, 36 + 1208 * i / 10, 118, 8, RGB(22, 26, 32), 1);
 
     snprintf(buf, sizeof(buf), "难度 %s  ·  每题 %d 秒", d.name, d.limitSec);
-    tx(dc, buf, 36, 134, 300, 20, F_SMALL, RGB(150, 157, 166),
+    tx(dc, buf, 36, 134, 300, 20, F_SMALL, RGB(88, 18, 44),
        DT_LEFT | DT_TOP);
 
     /* 四张牌 */
@@ -2256,16 +2355,15 @@ static void drawGameScreen(HDC dc)
     }
 
     /* 三题进度 */
-    tx(dc, "R O U N D", 36, 638, 120, 16, F_CAP, RGB(150, 157, 166),
+    tx(dc, "R O U N D", 36, 638, 120, 16, F_CAP, RGB(88, 18, 44),
        DT_LEFT | DT_TOP);
     for (int i = 0; i < ROUND_COUNT; ++i) {
         int bx = 36 + i * 64;
         fillRect(dc, bx, 660, 52, 6,
-                 (i + 1 < g.round) ? P_PINK : ((i + 1 == g.round) ? P_PINK : RGB(58, 66, 76)));
-        if (i + 1 > g.round) fillRect(dc, bx, 660, 52, 6, RGB(58, 66, 76));
+                 (i + 1 <= g.round) ? P_INK : RGB(216, 152, 180));
         snprintf(buf, sizeof(buf), "%02d", i + 1);
         tx(dc, buf, bx, 672, 52, 20, F_CAP,
-           (i + 1 <= g.round) ? P_WHITE : RGB(120, 128, 138), DT_LEFT | DT_TOP);
+           (i + 1 <= g.round) ? P_INK : RGB(122, 42, 72), DT_LEFT | DT_TOP);
     }
 
     drawFooter(dc, "回车提交 · Esc 返回菜单 · M 静音 · 只允许 + - * / ( ) 和数字", "V2.0");
@@ -2902,12 +3000,12 @@ static void toggleSound()
 static void showAbout()
 {
     MessageBoxA(g_hwnd,
-                "计算二十四点  ·  界园终端\n\n"
+                "计算二十四点\n\n"
                 "Windows 图形界面版（Win32 API + GDI 自绘，无第三方库）\n"
                 "随机发牌 · 限时挑战 · 精确分数运算 · 排行榜 · 语音音效\n\n"
-                "界面主题：深色金属背景 / 米白终端纸面 / 品红徽记\n\n"
+                "界面背景：粉色楼阁图片\n\n"
                 "南京邮电大学  程序设计课程设计",
-                "关 于  界园终端", MB_OK | MB_ICONINFORMATION);
+                "关于 计算二十四点", MB_OK | MB_ICONINFORMATION);
 }
 
 static void doCommand(int id)
@@ -3166,14 +3264,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         int ox = (cw - dw) / 2;
         int oy = (ch - dh) / 2;
 
-        /*
-         * 只有画布小于客户区（居中留白）时，才需要填留白处的底色；
-         * 而且只填留白那几条边，绝不动画布区域。
-         * 千万不要先把整个客户区 FillRect 再 BitBlt——
-         * 窗口 DC 上的任何“先写后盖”都会被人眼当成一下闪黑。
-         */
-        if (ox > 0 || oy > 0 || dw < cw || dh < ch) {
-            HBRUSH bg = CreateSolidBrush(RGB(6, 7, 10));
+        /* 只填画布外的留白，画布本身由背景位图覆盖 */
+        if (ox > 0 || oy > 0) {
+            HBRUSH bg = CreateSolidBrush(RGB(8, 9, 12));
             if (ox > 0) {
                 RECT a = { 0, 0, ox, ch };
                 RECT b = { ox + dw, 0, cw, ch };
@@ -3765,7 +3858,10 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdLine, int nCmdShow
     wc.hbrBackground = NULL;
     wc.lpszClassName = "Calc24GameWnd";
 
-    if (!RegisterClassExA(&wc)) return 1;
+    if (!RegisterClassExA(&wc)) {
+        freeFonts();
+        return 1;
+    }
 
     DWORD style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
     RECT  rc;
@@ -3783,11 +3879,14 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdLine, int nCmdShow
     if (wx < 0) wx = 0;
 
     HWND hwnd = CreateWindowExA(
-        0, "Calc24GameWnd", "计算二十四点  ·  界园终端",
-        style, wx, wy, winW, winH,
+        0, "Calc24GameWnd", "计算二十四点",
+         style, wx, wy, winW, winH,
         NULL, NULL, hInst, NULL);
 
-    if (hwnd == NULL) return 1;
+    if (hwnd == NULL) {
+        freeFonts();
+        return 1;
+    }
 
     ShowWindow(hwnd, nCmdShow);
     UpdateWindow(hwnd);
@@ -3799,6 +3898,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdLine, int nCmdShow
     }
 
     freeFonts();
+    freeBackground();
     return (int)m.wParam;
 }
 

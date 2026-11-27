@@ -7,6 +7,7 @@ rank.txt
 *.o
 *.obj
 .build-tmp/
+calc24-debug.exe
 
 # clangd 索引缓存
 .cache/
