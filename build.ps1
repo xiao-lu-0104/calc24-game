@@ -1,6 +1,9 @@
 ﻿# 计算 24 点游戏 —— 一键构建脚本（Windows / PowerShell）
 # 用法：在仓库根目录执行  .\build.ps1
 #       或在 VS Code 中按 Ctrl+Shift+B
+#       加 -Debug 生成带调试符号、未优化的 calc24-debug.exe（供 gdb 断点调试）
+
+param([switch]$Debug)
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -38,7 +41,8 @@ if (-not $gxx) {
 $src = Join-Path $root "src\计算24点游戏.cpp"
 $rc  = Join-Path $root "src\计算24点游戏.rc"
 $obj = Join-Path $tmp "resource.o"
-$out = Join-Path $root "计算24点游戏.exe"
+$outName = if ($Debug) { "calc24-debug.exe" } else { "计算24点游戏.exe" }
+$out = Join-Path $root $outName
 
 if (-not (Test-Path $src)) {
     Write-Host "找不到源文件：$src" -ForegroundColor Red
@@ -67,18 +71,27 @@ try {
 
     # ---------- 2. 编译主程序 ----------
     # -static 系列：把 libstdc++ / libgcc 静态链接进来，生成的 exe 换台机器也能跑
-    # -s        ：去掉符号表，体积更小
-    $args = @(
-        "-std=c++11", "-O2", "-Wall", "-Wextra",
-        "-mwindows",
-        "-static", "-static-libgcc", "-static-libstdc++", "-s",
-        "-o", "计算24点游戏.exe", "src\计算24点游戏.cpp"
-    )
-    if ($hasRes) { $args += $obj }
-    $args += @("-lgdi32", "-lwinmm")
+    # -s        ：去掉符号表，体积更小（调试构建不剥离符号，改用 -g -O0）
+    $gxxArgs = if ($Debug) {
+        @(
+            "-std=c++11", "-g", "-O0", "-Wall", "-Wextra",
+            "-mwindows",
+            "-static", "-static-libgcc", "-static-libstdc++",
+            "-o", $outName, "src\计算24点游戏.cpp"
+        )
+    } else {
+        @(
+            "-std=c++11", "-O2", "-Wall", "-Wextra",
+            "-mwindows",
+            "-static", "-static-libgcc", "-static-libstdc++", "-s",
+            "-o", $outName, "src\计算24点游戏.cpp"
+        )
+    }
+    if ($hasRes) { $gxxArgs += $obj }
+    $gxxArgs += @("-lgdi32", "-lwinmm", "-lmsimg32")
 
     Write-Host "[2/2] g++      编译主程序 ..."
-    & $gxx @args
+    & $gxx @gxxArgs
     if ($LASTEXITCODE -ne 0) { throw "编译失败，退出码 $LASTEXITCODE" }
 
     Write-Host ""

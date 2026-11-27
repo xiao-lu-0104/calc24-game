@@ -8,6 +8,9 @@ rank.txt
 *.obj
 .build-tmp/
 
+# clangd 索引缓存
+.cache/
+
 # --shots 导出的原始 BMP（处理后的 PNG 在 doc/screenshots）
 gui_*.bmp
 

@@ -1,0 +1,12 @@
+-std=c++11
+--target=x86_64-w64-windows-gnu
+-isystem
+C:/Users/admin/w64devkit/lib/gcc/x86_64-w64-mingw32/16.2.0/include/c++
+-isystem
+C:/Users/admin/w64devkit/lib/gcc/x86_64-w64-mingw32/16.2.0/include/c++/x86_64-w64-mingw32
+-isystem
+C:/Users/admin/w64devkit/lib/gcc/x86_64-w64-mingw32/16.2.0/include/c++/backward
+-isystem
+C:/Users/admin/w64devkit/lib/gcc/x86_64-w64-mingw32/16.2.0/include
+-isystem
+C:/Users/admin/w64devkit/include
