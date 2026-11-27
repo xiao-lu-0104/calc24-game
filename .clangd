@@ -1,0 +1,4 @@
+Diagnostics:
+  Suppress:
+    - builtin_definition
+    - redefinition_different_typedef
