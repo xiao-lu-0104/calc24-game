@@ -1564,8 +1564,8 @@ static const int BTN_RULES_N = 1;
 
 static const BtnDesc BTN_NAME[] = {
     { 28, 24, 44, 44, ID_N_BACK, 9, "" },
-    { 430, 400, 180, 52, ID_N_OK,   1, "确  定" },
-    { 630, 400, 180, 52, ID_N_SKIP, 0, "跳  过" }
+    { 450, 418, 180, 52, ID_N_OK,   1, "确  定" },
+    { 650, 418, 180, 52, ID_N_SKIP, 0, "跳  过" }
 };
 static const int BTN_NAME_N = 3;
 
@@ -2384,7 +2384,7 @@ static void drawNameScreen(HDC dc)
     tx(dc, "P L A Y E R   R E G I S T R A T I O N", 96, 58, 380, 16, F_CAP,
        RGB(150, 157, 166), DT_LEFT | DT_TOP);
 
-    paperCard(dc, 380, 180, 520, 360, 12, P_PAPER, P_INK, 2, true);
+    paperCard(dc, 380, 180, 520, 380, 12, P_PAPER, P_INK, 2, true);
     tx(dc, "留下你的名字", 420, 204, 400, 38, F_H1, P_INK, DT_LEFT | DT_TOP);
     tx(dc, "成绩会以这个名字记入排行榜", 422, 246, 420, 20, F_SMALL,
        RGB(110, 110, 110), DT_LEFT | DT_TOP);
@@ -2400,12 +2400,12 @@ static void drawNameScreen(HDC dc)
         SelectObject(dc, op);
         DeleteObject(pn);
     }
-    tx(dc, "最多 16 个字符；留空则记为「玩家」", 420, 366, 440, 20, F_SMALL,
+    tx(dc, "最多 16 个字符；留空则记为「玩家」", 420, 364, 440, 20, F_SMALL,
        RGB(110, 110, 110), DT_LEFT | DT_TOP);
-    tx(dc, "排行榜上同名玩家只保留最好成绩", 420, 388, 440, 20, F_SMALL,
+    tx(dc, "排行榜上同名玩家只保留最好成绩", 420, 386, 440, 20, F_SMALL,
        RGB(110, 110, 110), DT_LEFT | DT_TOP);
 
-    tx(dc, "输入后按回车或点「确定」", 420, 468, 440, 22, F_SMALL, P_PINK_D,
+    tx(dc, "输入后按回车或点「确定」", 420, 484, 440, 22, F_SMALL, P_PINK_D,
        DT_LEFT | DT_TOP);
 
     drawFooter(dc, "身份登记  //  PLAYER ID", "ESC 返回");

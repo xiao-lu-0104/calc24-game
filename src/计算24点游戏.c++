@@ -1,10 +1,3 @@
-/*==========================================================================
- *  编译： g++ -std=c++11 -O2 -mwindows -o 计算24点游戏.exe 计算24点游戏.cpp -lgdi32 -lwinmm
- *  功能：随机发 4 张扑克牌，玩家在限时内输入四则运算表达式使其结果等于 24；
- *        三题一局，按难度与剩余时间记分，成绩存入排行榜文件。
- *        声音用 MCI 播放 音频\ 子目录下的 mp3 素材。
- *========================================================================*/
-
 #define WIN32_LEAN_AND_MEAN
 
 #include <windows.h>
@@ -1347,62 +1340,70 @@ static void hGradient(HDC dc, int x, int y, int w, int h,
         fillRect(dc, x + i, y, 1, h, mixColor(left, right, i / span));
 }
 
-/* 斜向细纹：给色块加一层织理 */
-static void diagonalStripes(HDC dc, int x, int y, int w, int h,
-                            COLORREF c, int step)
+/* 内嵌背景图（图片\背景.bmp，已裁掉原图水印），资源 ID 与 .rc 里的一致 */
+static const int BG_RESID     = 201;
+static const int BG_ALPHA     = 205;    /* 背景图不透明度 0~255，越小越淡     */
+
+static HBITMAP g_bgImage      = NULL;   /* 内嵌的写意山水背景图               */
+static bool    g_bgImageTried = false;
+
+static HBITMAP backgroundImage()
 {
-    if (step < 4) step = 4;
-
-    int saved = SaveDC(dc);
-    IntersectClipRect(dc, x, y, x + w, y + h);
-
-    HPEN pn = CreatePen(PS_SOLID, 1, c);
-    HPEN op = (HPEN)SelectObject(dc, pn);
-    for (int i = -h; i < w + h; i += step) {
-        MoveToEx(dc, x + i, y, NULL);
-        LineTo(dc, x + i - h, y + h);
+    if (!g_bgImageTried) {
+        g_bgImageTried = true;
+        g_bgImage = (HBITMAP)LoadImageA(GetModuleHandleA(NULL),
+                                        MAKEINTRESOURCEA(BG_RESID),
+                                        IMAGE_BITMAP, 0, 0,
+                                        LR_CREATEDIBSECTION);
     }
-    SelectObject(dc, op);
-    DeleteObject(pn);
-
-    RestoreDC(dc, saved);
+    return g_bgImage;
 }
 
-/* 粉带：外侧最浓，向内快速过渡到白，同时自上而下略微加深 */
-static void pinkBand(HDC dc, int x, int y, int w, int h, bool fromLeft)
+/*
+ * 背景图等比铺满 (x,y,w,h)：先按目标比例从中间裁掉源图多余的一条，
+ * 再半透明叠到渐变底上，既透出画面，又不压过卡片和文字。
+ * 背景图缺失（比如没编资源）时什么都不画，只留渐变底。
+ */
+static void paintBackdropImage(HDC dc, int x, int y, int w, int h)
 {
-    const int SEG_X = 48;
-    const int SEG_Y = 24;
+    HBITMAP bmp = backgroundImage();
+    if (bmp == NULL) return;
 
-    for (int j = 0; j < SEG_Y; ++j) {
-        double ty = (SEG_Y > 1) ? j / (double)(SEG_Y - 1) : 0.0;
-        COLORREF dense = mixColor(RGB(248, 112, 156), RGB(198, 40, 92), ty);
-        COLORREF loose = mixColor(RGB(255, 247, 251), RGB(255, 233, 241), ty);
+    BITMAP bm;
+    if (GetObjectA(bmp, sizeof(bm), &bm) == 0) return;
 
-        int py = y + h * j / SEG_Y;
-        int ph = y + h * (j + 1) / SEG_Y - py;
-        if (ph <= 0) continue;
+    int sw = bm.bmWidth, sh = bm.bmHeight;
+    if (sw <= 0 || sh <= 0 || w <= 0 || h <= 0) return;
 
-        for (int i = 0; i < SEG_X; ++i) {
-            double tx = (i + 0.5) / SEG_X;
-            if (!fromLeft) tx = 1.0 - tx;
-            tx = pow(tx, 2.4);
+    int srcW = sw, srcH = sh;
+    if ((long long)sw * h > (long long)w * sh)
+        srcW = (int)((long long)sh * w / h);        /* 源图偏宽：裁左右 */
+    else
+        srcH = (int)((long long)sw * h / w);        /* 源图偏高：裁上下 */
+    if (srcW < 1) srcW = 1;
+    if (srcH < 1) srcH = 1;
 
-            int px = x + w * i / SEG_X;
-            int pw = x + w * (i + 1) / SEG_X - px;
-            if (pw <= 0) continue;
+    HDC mem = CreateCompatibleDC(dc);
+    if (mem == NULL) return;
+    HGDIOBJ old = SelectObject(mem, bmp);
 
-            fillRect(dc, px, py, pw, ph, mixColor(dense, loose, tx));
-        }
-    }
+    BLENDFUNCTION bf;
+    bf.BlendOp             = AC_SRC_OVER;
+    bf.BlendFlags          = 0;
+    bf.SourceConstantAlpha = (BYTE)BG_ALPHA;
+    bf.AlphaFormat         = 0;
+    AlphaBlend(dc, x, y, w, h, mem, (sw - srcW) / 2, (sh - srcH) / 2,
+               srcW, srcH, bf);
+
+    SelectObject(mem, old);
+    DeleteDC(mem);
 }
 
-/* 1280x800 的渐变版面：底色渐变 + 中央柔光 + 两侧粉带 + 上下黑带 */
+/* 1280x800 的版面：淡粉渐变打底，叠一张半透明山水背景图，上下压黑带 */
 static void paintBackground(HDC dc)
 {
     const int TOP_H  = 130;
     const int BOT_Y  = 748;
-    const int BAND_W = 340;
     const int BODY_H = BOT_Y - TOP_H;
 
     /* 1. 底色：上淡粉、下纯白 */
@@ -1413,24 +1414,14 @@ static void paintBackground(HDC dc)
     hGradient(dc, DES_W / 2, TOP_H, DES_W - DES_W / 2, BODY_H,
               P_WHITE, RGB(255, 243, 248));
 
-    /* 3. 两侧粉带：外侧浓、向内渐隐 */
-    pinkBand(dc, 0, TOP_H, BAND_W, BODY_H, true);
-    pinkBand(dc, DES_W - BAND_W, TOP_H, BAND_W, BODY_H, false);
+    /* 3. 写意山水背景图：等比铺满正文区，半透明叠在渐变底上 */
+    paintBackdropImage(dc, 0, TOP_H, DES_W, BODY_H);
 
-    /* 4. 白色区域铺一层极淡斜纹 */
-    diagonalStripes(dc, BAND_W, TOP_H, DES_W - 2 * BAND_W, BODY_H,
-                    RGB(253, 243, 248), 46);
-
-    /* 5. 粉带内部再叠一层亮斜纹，形成织理 */
-    diagonalStripes(dc, 0, TOP_H, BAND_W, BODY_H, RGB(255, 214, 230), 30);
-    diagonalStripes(dc, DES_W - BAND_W, TOP_H, BAND_W, BODY_H,
-                    RGB(255, 214, 230), 30);
-
-    /* 6. 上下黑带 */
+    /* 4. 上下黑带 */
     vGradient(dc, 0, 0, DES_W, TOP_H, RGB(5, 7, 10), RGB(46, 54, 64));
     vGradient(dc, 0, BOT_Y, DES_W, DES_H - BOT_Y, RGB(46, 54, 64), RGB(5, 7, 10));
 
-    /* 7. 黑带与内容区的交界线 */
+    /* 5. 黑带与内容区的交界线 */
     hline(dc, 0, TOP_H - 2, DES_W, RGB(158, 62, 96), 2);
     hline(dc, 0, BOT_Y, DES_W, RGB(158, 62, 96), 2);
 }
@@ -1452,6 +1443,11 @@ static void freeBackground()
         DeleteObject(g_bgBitmap);
         g_bgBitmap = NULL;
     }
+    if (g_bgImage != NULL) {
+        DeleteObject(g_bgImage);
+        g_bgImage      = NULL;
+        g_bgImageTried = false;
+    }
 }
 
 static void buildBackground()
@@ -1459,8 +1455,12 @@ static void buildBackground()
     HDC screen = GetDC(NULL);
     if (screen == NULL) return;
 
+    int bw = sc(DES_W), bh = sc(DES_H);
+    if (bw < 1) bw = 1;
+    if (bh < 1) bh = 1;
+
     g_bgDC     = CreateCompatibleDC(screen);
-    g_bgBitmap = CreateCompatibleBitmap(screen, DES_W, DES_H);
+    g_bgBitmap = CreateCompatibleBitmap(screen, bw, bh);
     ReleaseDC(NULL, screen);
 
     if (g_bgDC == NULL || g_bgBitmap == NULL) {
@@ -1469,6 +1469,14 @@ static void buildBackground()
     }
 
     g_bgOldBitmap = (HBITMAP)SelectObject(g_bgDC, g_bgBitmap);
+
+    /* 背景按实际像素缓存，paintBackground 里照旧写 1280x800 逻辑坐标 */
+    SetMapMode(g_bgDC, MM_ANISOTROPIC);
+    SetWindowExtEx(g_bgDC, DES_W, DES_H, NULL);
+    SetViewportExtEx(g_bgDC, bw, bh, NULL);
+    SetWindowOrgEx(g_bgDC, 0, 0, NULL);
+    SetViewportOrgEx(g_bgDC, 0, 0, NULL);
+
     paintBackground(g_bgDC);
 }
 
@@ -1556,8 +1564,8 @@ static const int BTN_RULES_N = 1;
 
 static const BtnDesc BTN_NAME[] = {
     { 28, 24, 44, 44, ID_N_BACK, 9, "" },
-    { 430, 400, 180, 52, ID_N_OK,   1, "确  定" },
-    { 630, 400, 180, 52, ID_N_SKIP, 0, "跳  过" }
+    { 450, 418, 180, 52, ID_N_OK,   1, "确  定" },
+    { 650, 418, 180, 52, ID_N_SKIP, 0, "跳  过" }
 };
 static const int BTN_NAME_N = 3;
 
@@ -2376,7 +2384,7 @@ static void drawNameScreen(HDC dc)
     tx(dc, "P L A Y E R   R E G I S T R A T I O N", 96, 58, 380, 16, F_CAP,
        RGB(150, 157, 166), DT_LEFT | DT_TOP);
 
-    paperCard(dc, 380, 180, 520, 360, 12, P_PAPER, P_INK, 2, true);
+    paperCard(dc, 380, 180, 520, 380, 12, P_PAPER, P_INK, 2, true);
     tx(dc, "留下你的名字", 420, 204, 400, 38, F_H1, P_INK, DT_LEFT | DT_TOP);
     tx(dc, "成绩会以这个名字记入排行榜", 422, 246, 420, 20, F_SMALL,
        RGB(110, 110, 110), DT_LEFT | DT_TOP);
@@ -2392,12 +2400,12 @@ static void drawNameScreen(HDC dc)
         SelectObject(dc, op);
         DeleteObject(pn);
     }
-    tx(dc, "最多 16 个字符；留空则记为「玩家」", 420, 366, 440, 20, F_SMALL,
+    tx(dc, "最多 16 个字符；留空则记为「玩家」", 420, 364, 440, 20, F_SMALL,
        RGB(110, 110, 110), DT_LEFT | DT_TOP);
-    tx(dc, "排行榜上同名玩家只保留最好成绩", 420, 388, 440, 20, F_SMALL,
+    tx(dc, "排行榜上同名玩家只保留最好成绩", 420, 386, 440, 20, F_SMALL,
        RGB(110, 110, 110), DT_LEFT | DT_TOP);
 
-    tx(dc, "输入后按回车或点「确定」", 420, 468, 440, 22, F_SMALL, P_PINK_D,
+    tx(dc, "输入后按回车或点「确定」", 420, 484, 440, 22, F_SMALL, P_PINK_D,
        DT_LEFT | DT_TOP);
 
     drawFooter(dc, "身份登记  //  PLAYER ID", "ESC 返回");
@@ -3880,7 +3888,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdLine, int nCmdShow
 
     HWND hwnd = CreateWindowExA(
         0, "Calc24GameWnd", "计算二十四点",
-         style, wx, wy, winW, winH,
+        style, wx, wy, winW, winH,
         NULL, NULL, hInst, NULL);
 
     if (hwnd == NULL) {
