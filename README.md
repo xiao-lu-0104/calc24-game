@@ -64,7 +64,10 @@ In VS Code, pick the 「C++ 调试 · 计算24点游戏 (MinGW gdb)」 configura
 ```bash
 windres src/计算24点游戏.rc -O coff -o src/资源.o --codepage=936
 g++ -std=c++11 -O2 -mwindows -static -static-libgcc -static-libstdc++ -s \
-    -o 计算24点游戏.exe src/计算24点游戏.cpp src/资源.o -lgdi32 -lwinmm -lmsimg32
+    -o 计算24点游戏.exe \
+    src/core.cpp src/audio.cpp src/gfx.cpp src/ui_screens.cpp \
+    src/app.cpp src/selftest.cpp src/main.cpp src/资源.o \
+    -lgdi32 -lwinmm -lmsimg32
 ```
 
 - `-mwindows` — build a GUI subsystem app without the black console window
@@ -130,9 +133,15 @@ Command-line arguments:
 ├── compile_flags.txt    clangd flags (MinGW target and include paths)
 ├── .clangd              clangd config (suppresses known mingw header false positives)
 ├── .vscode\             VS Code build / run tasks
-├── src\                 source code
-│   ├── 计算24点游戏.cpp  main program (GBK encoded, ~3850 lines)
-│   ├── 计算24点游戏.c++  identical submission copy of the source
+├── src\                 source code (7 modules + 1 shared header)
+│   ├── calc24.h         shared header: constants, types, globals, prototypes
+│   ├── core.cpp         solver / parser / scoring / leaderboard  (no Win32 UI deps)
+│   ├── audio.cpp        MCI audio playback
+│   ├── gfx.cpp          drawing primitives, cards, icons, background
+│   ├── ui_screens.cpp   button table + the six screens
+│   ├── app.cpp          repaint, game flow, WndProc, resource init
+│   ├── selftest.cpp     screenshot export + built-in self-test
+│   ├── main.cpp         WinMain
 │   └── 计算24点游戏.rc   resource script (mp3 as RCDATA, background as BITMAP)
 ├── doc\
 │   ├── 使用说明.txt       detailed manual and defence notes
@@ -143,6 +152,25 @@ Command-line arguments:
 
 > The executable, `音频\` and `rank.txt` must live in the same directory: the program uses
 > `GetModuleFileName` to locate its own folder and resolves assets and data relative to it.
+
+## Code structure
+
+The source is split into seven modules sharing one header, `calc24.h`. Modules talk only
+through the interfaces declared there; the header exports only the symbols actually used by
+more than one module, so each module's private helpers stay `static`.
+
+| Module | Responsibility | Size |
+|---|---|---|
+| `core.cpp` | rational arithmetic, the 24-point solver (with the `intOnly` constraint), recursive-descent expression parser, scoring and leaderboard | ~500 lines |
+| `audio.cpp` | asynchronous MCI playback, embedded mp3 extraction, music/SFX arbitration | ~310 lines |
+| `gfx.cpp` | drawing primitives, cut-corner cards, icons, gradient background, playing cards | ~530 lines |
+| `ui_screens.cpp` | button table, main menu, difficulty / rules / leaderboard, game / name / summary screens | ~970 lines |
+| `app.cpp` | global state, repaint, game flow, edit-control subclassing, `WndProc` | ~1040 lines |
+| `selftest.cpp` | `--shots` screenshot export and `--selftest` checks | ~310 lines |
+| `main.cpp` | `WinMain`, DPI awareness, window creation | ~130 lines |
+
+`core.cpp` contains no Win32 UI calls at all — only `std::string` and the standard library — so
+the algorithm layer can be compiled and tested on its own.
 
 ## Implementation notes
 
@@ -226,7 +254,10 @@ VS Code 中选择「C++ 调试 · 计算24点游戏 (MinGW gdb)」配置即可�
 ```bash
 windres src/计算24点游戏.rc -O coff -o src/资源.o --codepage=936
 g++ -std=c++11 -O2 -mwindows -static -static-libgcc -static-libstdc++ -s \
-    -o 计算24点游戏.exe src/计算24点游戏.cpp src/资源.o -lgdi32 -lwinmm -lmsimg32
+    -o 计算24点游戏.exe \
+    src/core.cpp src/audio.cpp src/gfx.cpp src/ui_screens.cpp \
+    src/app.cpp src/selftest.cpp src/main.cpp src/资源.o \
+    -lgdi32 -lwinmm -lmsimg32
 ```
 
 - `-mwindows`：生成窗口程序，不带黑色控制台
@@ -285,9 +316,15 @@ VS Code 默认用 clangd 提供 C/C++ 提示，而 clangd 自带的是 MSVC 头�
 ├── compile_flags.txt    clangd 编译参数（MinGW 目标与头文件路径）
 ├── .clangd              clangd 配置（屏蔽 mingw 头文件的已知误报）
 ├── .vscode\             VS Code 构建与运行任务
-├── src\                 源码
-│   ├── 计算24点游戏.cpp  主程序（GBK 编码，约 3850 行）
-│   ├── 计算24点游戏.c++  同一份源码的提交副本
+├── src\                 源码（7 个模块 + 1 个公共头文件）
+│   ├── calc24.h         公共头文件：常量、类型、全局状态、函数声明
+│   ├── core.cpp         求解器 / 解析器 / 计分 / 排行榜（不依赖界面）
+│   ├── audio.cpp        MCI 音频播放
+│   ├── gfx.cpp          绘图原语、扑克牌、图标、背景图
+│   ├── ui_screens.cpp   按钮表 + 六个界面
+│   ├── app.cpp          重绘、对局流程、窗口过程、资源初始化
+│   ├── selftest.cpp     截图导出 + 内置自检
+│   ├── main.cpp         WinMain
 │   └── 计算24点游戏.rc   资源脚本（把 mp3 以 RCDATA、背景图以 BITMAP 打包进 exe）
 ├── doc\
 │   ├── 使用说明.txt       详细使用说明与答辩要点
@@ -298,6 +335,24 @@ VS Code 默认用 clangd 提供 C/C++ 提示，而 clangd 自带的是 MSVC 头�
 
 > 可执行文件与 `音频\`、`rank.txt` 必须位于同一目录，因为程序用
 > `GetModuleFileName` 取自身所在目录来定位素材与数据文件。
+
+## 代码结构
+
+源码按职责分为 7 个模块，共用一个头文件 `calc24.h`。模块之间只通过头文件声明的接口交互，
+头文件里只放被两个以上模块用到的符号，各模块内部的辅助函数仍保持 `static`。
+
+| 模块 | 职责 | 规模 |
+|---|---|---|
+| `core.cpp` | 有理数运算、24 点求解器（含 `intOnly` 整数约束）、表达式递归下降解析、计分与排行榜 | ~500 行 |
+| `audio.cpp` | MCI 异步播放、内嵌 mp3 解包、音效与背景音乐互斥 | ~310 行 |
+| `gfx.cpp` | 绘图原语、切角卡片、图标、渐变背景、扑克牌 | ~530 行 |
+| `ui_screens.cpp` | 按钮描述表、主菜单、难度 / 规则 / 排行榜、对局 / 姓名 / 结算 | ~970 行 |
+| `app.cpp` | 全局状态、窗口重绘、对局流程、输入框子类化、`WndProc` | ~1040 行 |
+| `selftest.cpp` | `--shots` 截图导出、`--selftest` 自检 | ~310 行 |
+| `main.cpp` | `WinMain`、DPI 感知、窗口创建 | ~130 行 |
+
+其中 `core.cpp` 不包含任何 Win32 界面调用（只用 `std::string` 与标准库），
+可以脱离 Windows 平台单独编译测试算法。
 
 ## 实现要点
 

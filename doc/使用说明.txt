@@ -8,9 +8,17 @@
             最大化、拉伸缩放，缩放时保持等比不留黑边。
 
 一、文件清单
-   src\计算24点游戏.cpp    源程序（GBK/ANSI 编码，Dev-C++ / VS 可直接编译）
-   src\计算24点游戏.c++    源程序提交副本（内容与 .cpp 完全相同）
-   src\计算24点游戏.rc     声音资源脚本（把 mp3 打包进 exe 用）
+   源码位于 src\ 目录，按职责分为 7 个模块 + 1 个公共头文件（均为 GBK/ANSI 编码）：
+   src\calc24.h            公共头文件：常量、配色、数据类型、全局状态、函数声明
+   src\core.cpp            核心逻辑：有理数运算 / 24 点求解器 / 表达式解析 / 计分排行榜
+                           （不依赖任何 Win32 界面调用，可单独编译测试算法）
+   src\audio.cpp           音频播放（MCI）：内嵌 mp3 解包、音效与背景音乐互斥
+   src\gfx.cpp             绘图基础：绘图原语、切角卡片、图标、背景图、扑克牌
+   src\ui_screens.cpp      界面：按钮表、主菜单、难度 / 规则 / 排行榜、对局 / 姓名 / 结算
+   src\app.cpp             应用层：全局状态、重绘、对局流程、输入框、窗口过程
+   src\selftest.cpp        截图导出（--shots）与内置自检（--selftest）
+   src\main.cpp            程序入口 WinMain
+   src\计算24点游戏.rc     资源脚本（把 mp3 与背景图打包进 exe 用）
    计算24点游戏.exe        已编译好的可执行文件，双击即可运行（无控制台窗口）
                            ★ 声音已经打包进 exe，单独拷这一个文件给别人也能出声
    rank.txt               排行榜数据文件（程序自动读写，可删除）
@@ -31,16 +39,18 @@
                            并补全封面与分工中的【请填写】。
 
 二、编译方法
-   【Dev-C++】打开 src\计算24点游戏.cpp，
-              工程属性 → 参数 → 链接器 中加入  -lgdi32 -mwindows  后按 F11。
+   【Dev-C++】新建「Console Application」空工程，把 src\ 下 7 个 .cpp 全部加入，
+              工程属性 → 参数 → 链接器 中加入  -lgdi32 -lwinmm -lmsimg32 -mwindows  后按 F11。
    【VS Code】打开本文件夹，Ctrl+Shift+B 构建，F5 调试运行。
               需先在本机安装 MinGW-w64（g++）并把它的 bin 目录加进 PATH。
-   【Visual Studio】新建 Windows 桌面向导 → 添加现有项 src\计算24点游戏.cpp → Ctrl+F5。
+   【Visual Studio】新建 Windows 桌面向导 → 添加现有项（src\ 下 7 个 .cpp）→ Ctrl+F5。
    【命令行】先在 src 目录下把声音打包成资源：
               windres 计算24点游戏.rc -O coff -o 资源.o --codepage=936
-           再编源程序（在仓库根目录执行）：
+           再编源程序（在仓库根目录执行，7 个模块一起链接）：
               g++ -std=c++11 -O2 -mwindows -o 计算24点游戏.exe ^
-                  src\计算24点游戏.cpp src\资源.o -lgdi32 -lwinmm
+                  src\core.cpp src\audio.cpp src\gfx.cpp src\ui_screens.cpp ^
+                  src\app.cpp src\selftest.cpp src\main.cpp src\资源.o ^
+                  -lgdi32 -lwinmm -lmsimg32
    注意 1：-mwindows 表示生成窗口程序（不带黑色控制台窗口），不能省略；
            -lwinmm 是 MCI 音频所需的链接库，缺了会报 mciSendStringA 未定义。
            资源.o 和 --codepage=936 是用来把中文文件名的 mp3 打进 exe 的，
@@ -169,4 +179,7 @@
   12. 界面改版（合作完成）：主界面重做为「界园终端」卡片式布局，
       设计画布由 1040×700 扩大到 1280×800，新增切角卡片、条形码、
       等级徽章、竖向标题、状态栏等绘制元素，配色改为深蓝灰 + 米白 + 品红。
+  13. 源码由单文件拆分为 7 个模块 + 1 个公共头文件，按「核心算法 / 音频 / 绘图 /
+      界面 / 应用层 / 自检 / 入口」分工。头文件只导出被多个模块使用的符号，
+      各模块内部辅助函数仍为 static；核心算法层不再依赖任何 Win32 界面调用。
 ========================================================================

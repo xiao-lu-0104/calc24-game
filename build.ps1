@@ -38,19 +38,27 @@ if (-not $gxx) {
     exit 1
 }
 
-$src = Join-Path $root "src\计算24点游戏.cpp"
+$srcDir = Join-Path $root "src"
 $rc  = Join-Path $root "src\计算24点游戏.rc"
 $obj = Join-Path $tmp "resource.o"
 $outName = if ($Debug) { "calc24-debug.exe" } else { "计算24点游戏.exe" }
 $out = Join-Path $root $outName
 
-if (-not (Test-Path $src)) {
-    Write-Host "找不到源文件：$src" -ForegroundColor Red
-    exit 1
+# 多文件源码（分模块组织，头文件 calc24.h 由各模块共用）
+$modules = @('core', 'audio', 'gfx', 'ui_screens', 'app', 'selftest', 'main')
+$sources = @()
+foreach ($m in $modules) {
+    $f = Join-Path $srcDir "$m.cpp"
+    if (-not (Test-Path $f)) {
+        Write-Host "找不到源文件：$f" -ForegroundColor Red
+        exit 1
+    }
+    $sources += "src\$m.cpp"
 }
 
 Write-Host "编译器：$gxx"
 & $gxx --version | Select-Object -First 1
+Write-Host "模块  ：$($sources.Count) 个源文件"
 Write-Host ""
 
 Push-Location $root
@@ -77,20 +85,21 @@ try {
             "-std=c++11", "-g", "-O0", "-Wall", "-Wextra",
             "-mwindows",
             "-static", "-static-libgcc", "-static-libstdc++",
-            "-o", $outName, "src\计算24点游戏.cpp"
+            "-o", $outName
         )
     } else {
         @(
             "-std=c++11", "-O2", "-Wall", "-Wextra",
             "-mwindows",
             "-static", "-static-libgcc", "-static-libstdc++", "-s",
-            "-o", $outName, "src\计算24点游戏.cpp"
+            "-o", $outName
         )
     }
+    $gxxArgs += $sources
     if ($hasRes) { $gxxArgs += $obj }
     $gxxArgs += @("-lgdi32", "-lwinmm", "-lmsimg32")
 
-    Write-Host "[2/2] g++      编译主程序 ..."
+    Write-Host "[2/2] g++      编译 $($sources.Count) 个模块 ..."
     & $gxx @gxxArgs
     if ($LASTEXITCODE -ne 0) { throw "编译失败，退出码 $LASTEXITCODE" }
 
