@@ -5,8 +5,6 @@
 
 #include "calc24.h"
 
-/*====================== 全局状态定义 ======================*/
-
 HFONT  F_HERO   = NULL;      /* 大标题 40（中文）                    */
 HFONT  F_H1     = NULL;      /* 卡片标题 32                          */
 HFONT  F_H2     = NULL;      /* 小标题 26                            */
@@ -40,8 +38,6 @@ int    g_pressSlot = -1;     /* 按下按钮在列表中的下标               */
 bool   g_nameFromMenu = false; /* 姓名界面是“档案改名”而非开局     */
 GameState g;
 
-/*====================== 缩放工具 ======================*/
-
 int sc(int v) { return (int)(v * g_scale + 0.5); }
 
 /*
@@ -61,8 +57,6 @@ double viewScale(int cw, int ch)
     if (s > 4.0)  s = 4.0;
     return s;
 }
-
-/*====================== 十八、窗口重绘 ======================*/
 
 static void repaint()
 {
@@ -142,8 +136,6 @@ static HDC getMemCanvas(HDC ref, int w, int h)
     }
     return g_memDC;
 }
-
-/*====================== 十九、对局流程 ======================*/
 
 static void layoutEdit();          /* 前置声明：按当前窗口尺寸摆放输入框 */
 
@@ -238,7 +230,6 @@ static void finishRound(int result, int score, int usedMs)
         ShowWindow(g_edit, SW_HIDE);   /* 结果区不需要输入框 */
     }
 
-    /* 答对（包括“本题无解”判断正确）是“嘿嘿”，否则“你干嘛哎哟” */
     if (result == RES_RIGHT || result == RES_NOANS_OK) playSfx(SND_RIGHT);
     else                                              playSfx(SND_WRONG);
 }
@@ -248,7 +239,6 @@ static void gotoSummary()
     g.screen = SCR_SUMMARY;
     stopTimer();
 
-    /* 结算音效：三题全部答对播“牛逼”，有任何一题不对就播“哎呀” */
     bool allRight = true;
     for (int i = 0; i < ROUND_COUNT; ++i) {
         if (g.roundRes[i] != RES_RIGHT && g.roundRes[i] != RES_NOANS_OK)
@@ -272,7 +262,6 @@ static void gotoSummary()
     }
 }
 
-/* 判题 */
 static void doSubmit()
 {
     if (g.subState != GS_INPUT) return;
@@ -364,8 +353,6 @@ static void doNext()
     newRound(false, rand() % 3 == 0);
 }
 
-/*====================== 二十、输入框子类化 ======================*/
-
 #define WM_APP_SUBMIT (WM_APP + 1)
 
 static LRESULT CALLBACK EditProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
@@ -443,7 +430,6 @@ static void layoutEdit()
     /* 输入框挪走后，它原来盖住的地方要重画一次 */
     repaint();
 }
-/*====================== 二十一、命令分派 ======================*/
 
 static void enterScreen(int screen)
 {
@@ -679,8 +665,6 @@ static void doCommand(int id)
     }
 }
 
-/*====================== 二十二、窗口过程 ======================*/
-
 /* 把客户区像素坐标换算成设计坐标（考虑居中偏移与缩放） */
 static void clientToDesign(int px, int py, int &dx, int &dy)
 {
@@ -852,7 +836,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_TIMER: {
         if (g.screen != SCR_GAME) { KillTimer(hwnd, wp); return 0; }
 
-        /* 发牌动画 */
         if (g.dealt < CARD_COUNT) {
             DWORD now = GetTickCount();
             if (now - g.animTick >= 90) {
@@ -875,7 +858,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             if (remain != g.remainMs) {
                 g.remainMs = remain;
 
-                /* 时间过半：催一下 */
                 if (!g.warnPlayed && g.remainMs > 0 &&
                     g.remainMs * 2 <= g.limitMs) {
                     g.warnPlayed = true;
@@ -957,8 +939,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
     return DefWindowProcA(hwnd, msg, wp, lp);
 }
-
-/*====================== 二十三、资源初始化 ======================*/
 
 static HFONT mkFont(int h, int weight, const char *face)
 {

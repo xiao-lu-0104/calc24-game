@@ -5,8 +5,6 @@
 
 #include "calc24.h"
 
-/*====================== 十二、按钮描述表 ======================*/
-
 /* style: 0=纸面按钮 1=黑底主按钮 2=纸面文字按钮 3=难度卡(自绘)
           4=复选框 5=深色文字按钮 7=自绘卡片 8=图标按钮 9=返回图标 */
 
@@ -90,8 +88,6 @@ const BtnDesc *curButtons(int &n)
     n = 0;
     return NULL;
 }
-
-/*====================== 十三、按钮绘制 ======================*/
 
 static int iconKindOfId(int id)
 {
@@ -202,8 +198,6 @@ static void drawAllButtons(HDC dc)
     }
 }
 
-/*====================== 十四、主菜单 ======================*/
-
 static bool slotHover(int i) { return g_hoverSlot == i; }
 static bool slotPress(int i) { return g_pressSlot == i; }
 
@@ -257,7 +251,6 @@ static void menuLeftColumn(HDC dc)
     tx(dc, "24", 140, 100, 440, 300, F_WATER, RGB(255, 216, 230),
        DT_LEFT | DT_TOP);
 
-    /* 等级徽章 */
     const int cx = 112, cy = 470, r = 45;
     HBRUSH br = CreateSolidBrush(RGB(16, 19, 24));
     HBRUSH ob = (HBRUSH)SelectObject(dc, br);
@@ -283,7 +276,6 @@ static void menuLeftColumn(HDC dc)
     tx(dc, "ID: LOCAL-0001", 58, 558, 260, 18, F_CAP, RGB(122, 28, 60),
        DT_LEFT | DT_TOP | DT_SINGLELINE);
 
-    /* 对白框 */
     paperCard(dc, 56, 586, 478, 76, 8, RGB(14, 17, 22), RGB(190, 196, 204), 1, false);
     tx(dc, "V O I C E", 70, 591, 100, 14, F_CAP, P_PINK, DT_LEFT | DT_TOP);
     tx(dc, "四条运算，二十四点。", 70, 608, 440, 24, F_BODY, P_WHITE,
@@ -291,7 +283,6 @@ static void menuLeftColumn(HDC dc)
     tx(dc, "限时之内，一算即中。", 70, 634, 440, 24, F_BODY,
        RGB(206, 211, 218), DT_LEFT | DT_TOP | DT_SINGLELINE);
 
-    /* 最新战报 */
     cutFill(dc, 61, 679, 268, 82, 8, RGB(8, 10, 14));
     cutFill(dc, 56, 674, 268, 82, 8, RGB(18, 15, 20));
     POINT tag[4] = { { 300, 674 }, { 324, 674 }, { 324, 756 }, { 292, 756 } };
@@ -306,14 +297,12 @@ static void menuLeftColumn(HDC dc)
     tx(dc, bestScore() > 0 ? "BEST RECORD" : "NO RECORD YET", 70, 732, 220, 16,
        F_CAP, RGB(255, 226, 236), DT_LEFT | DT_TOP);
 
-    /* 音效开关 */
     paperCard(dc, 336, 674, 100, 82, 6, P_PAPER, P_INK, 1, true);
     if (slotHover(7)) cutBorder(dc, 334, 672, 104, 86, 8, P_PINK, 2);
     drawIcon(dc, g_sfxOn ? 6 : 7, 386, 700, 20, P_INK);
     tx(dc, g_sfxOn ? "音效 开" : "音效 关", 336, 716, 100, 22, F_SMALL, P_INK,
        DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
-    /* 题数信息块 */
     paperCard(dc, 444, 674, 90, 82, 6, RGB(30, 35, 42), RGB(120, 128, 136), 1, true);
     tx(dc, "3", 444, 688, 90, 30, F_NUM_M, P_WHITE,
        DT_CENTER | DT_VCENTER | DT_SINGLELINE);
@@ -370,7 +359,6 @@ static void menuHero(HDC dc)
 
 static void menuGrid(HDC dc)
 {
-    /* 难度设置 */
     {
         const int x = 700, y = 340, w = 270, h = 152;
         paperCard(dc, x, y, w, h, 10, P_PAPER, P_INK, 2, true);
@@ -409,7 +397,6 @@ static void menuGrid(HDC dc)
         }
     }
 
-    /* 玩家档案 */
     {
         const int x = 978, y = 340, w = 270, h = 152;
         paperCard(dc, x, y, w, h, 10, P_PAPER, P_INK, 2, true);
@@ -426,7 +413,6 @@ static void menuGrid(HDC dc)
            DT_LEFT | DT_TOP);
     }
 
-    /* 排行榜 */
     {
         const int x = 700, y = 508, w = 178, h = 92;
         cutFill(dc, x + 5, y + 5, w, h, 8, RGB(9, 12, 16));
@@ -440,7 +426,6 @@ static void menuGrid(HDC dc)
         fillRect(dc, x, y + h - 4, w, 4, P_PINK_D);
     }
 
-    /* 游戏规则 */
     {
         const int x = 884, y = 508, w = 178, h = 92;
         paperCard(dc, x, y, w, h, 8, P_PAPER, P_INK, 1, true);
@@ -452,7 +437,6 @@ static void menuGrid(HDC dc)
            RGB(70, 70, 70), DT_LEFT | DT_TOP);
     }
 
-    /* 退出 */
     {
         const int x = 1068, y = 508, w = 178, h = 92;
         cutFill(dc, x + 5, y + 5, w, h, 8, RGB(9, 12, 16));
@@ -465,7 +449,6 @@ static void menuGrid(HDC dc)
         drawIcon(dc, 8, x + 142, y + 38, 22, P_PINK);
     }
 
-    /* 今日战报 */
     {
         const int x = 700, y = 616, w = 270, h = 112;
         paperCard(dc, x, y, w, h, 10, P_PAPER, P_INK, 2, true);
@@ -480,7 +463,6 @@ static void menuGrid(HDC dc)
            DT_LEFT | DT_TOP);
     }
 
-    /* 关于 */
     {
         const int x = 978, y = 616, w = 270, h = 112;
         paperCard(dc, x, y, w, h, 10, P_PAPER, P_INK, 2, true);
@@ -521,8 +503,6 @@ static void drawMenuScreen(HDC dc)
 
     drawFooter(dc, "CALC-24  TERMINAL  //  计算二十四点", "V2.0");
 }
-
-/*====================== 十五、难度 / 规则 / 排行榜 ======================*/
 
 static void drawDiffScreen(HDC dc)
 {
@@ -701,7 +681,6 @@ static void drawGameScreen(HDC dc)
     tx(dc, "24", 250, 110, 500, 340, F_WATER, RGB(252, 226, 236),
        DT_LEFT | DT_TOP);
 
-    /* 顶栏 */
     tx(dc, "限时训练", 94, 18, 300, 38, F_H2, P_WHITE, DT_LEFT | DT_TOP);
     tx(dc, "T E R M I N A L   / /   R O U N D", 96, 56, 360, 16, F_CAP,
        RGB(150, 157, 166), DT_LEFT | DT_TOP);
@@ -712,7 +691,6 @@ static void drawGameScreen(HDC dc)
     snprintf(buf, sizeof(buf), "SCORE %d", g.totalScore);
     tx(dc, buf, 944, 52, 300, 18, F_CAP, RGB(168, 174, 182), DT_RIGHT | DT_TOP);
 
-    /* 计时 */
     tx(dc, "T I M E", 36, 96, 120, 16, F_CAP, RGB(150, 157, 166),
        DT_LEFT | DT_TOP);
     int sec = (g.remainMs + 999) / 1000;
@@ -737,7 +715,6 @@ static void drawGameScreen(HDC dc)
     tx(dc, buf, 36, 134, 300, 20, F_SMALL, RGB(88, 18, 44),
        DT_LEFT | DT_TOP);
 
-    /* 四张牌 */
     const int cw = 160, ch = 220, gap = 24;
     int x0 = (DES_W - (cw * CARD_COUNT + gap * (CARD_COUNT - 1))) / 2;
     for (int i = 0; i < CARD_COUNT; ++i) {
@@ -748,7 +725,6 @@ static void drawGameScreen(HDC dc)
             drawPlayingCard(dc, cx, 172, cw, ch, 0, 0, true, i);
     }
 
-    /* 提示条 */
     fillRect(dc, 284, 420, 712, 38, RGB(15, 18, 23));
     fillRect(dc, 284, 420, 4, 38, P_PINK);
     tx(dc, "使用 + - * / 与括号，把四张牌各用一次，凑成 24",
@@ -762,7 +738,6 @@ static void drawGameScreen(HDC dc)
         tx(dc, "I N P U T   E X P R E S S I O N", 304, 488, 300, 16, F_CAP,
            RGB(110, 110, 110), DT_LEFT | DT_TOP);
 
-        /* 原生输入框的外框 */
         fillRect(dc, 304, 514, 452, 52, P_WHITE);
         {
             HPEN pn = CreatePen(PS_SOLID, 2, P_INK);
@@ -802,7 +777,6 @@ static void drawGameScreen(HDC dc)
         }
     }
 
-    /* 三题进度 */
     tx(dc, "R O U N D", 36, 638, 120, 16, F_CAP, RGB(88, 18, 44),
        DT_LEFT | DT_TOP);
     for (int i = 0; i < ROUND_COUNT; ++i) {
@@ -901,7 +875,6 @@ static void drawSummaryScreen(HDC dc)
            DT_CENTER | DT_VCENTER | DT_SINGLELINE);
     }
 
-    /* 三题明细 */
     hline(dc, 180, 360, 920, P_INK, 2);
     static const char *HEAD[4] = { "题号", "判定", "用时", "得分" };
     static const int   CX[4]   = { 200, 360, 620, 820 };
@@ -935,8 +908,6 @@ static void drawSummaryScreen(HDC dc)
 
     drawFooter(dc, "成绩已写入排行榜  //  RANK SAVED", "ESC 返回");
 }
-
-/*====================== 十七、总绘制入口 ======================*/
 
 void drawCanvas(HDC dc, int w, int h)
 {

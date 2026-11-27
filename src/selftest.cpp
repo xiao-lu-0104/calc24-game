@@ -4,8 +4,6 @@
 
 #include "calc24.h"
 
-/*====================== 二十四、界面截图导出 ======================*/
-
 static bool saveBmp(HDC refDC, int w, int h, const char *path)
 {
     HDC     mem = CreateCompatibleDC(refDC);
@@ -166,8 +164,6 @@ void exportShots()
 
     ReleaseDC(NULL, screen);
 }
-
-/*====================== 二十五、程序自检 ======================*/
 
 static int  g_pass = 0;
 static int  g_fail = 0;

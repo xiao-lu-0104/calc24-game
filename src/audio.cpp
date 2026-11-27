@@ -4,8 +4,6 @@
 
 #include "calc24.h"
 
-/*====================== 音效播放（MCI） ======================*/
-
 static bool g_mciOpened = false;      /* sfx 别名是否已打开 */
 static bool g_bgmOpened = false;      /* bgm 别名是否已打开 */
 static bool g_bgmActive = false;      /* BGM 逻辑上应该在响 */

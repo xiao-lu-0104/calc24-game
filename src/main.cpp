@@ -4,8 +4,6 @@
 
 #include "calc24.h"
 
-/*====================== 二十六、程序入口 ======================*/
-
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR cmdLine, int nCmdShow)
 {
     (void)hPrev;

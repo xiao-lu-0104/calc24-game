@@ -5,8 +5,6 @@
 
 #include "calc24.h"
 
-/*====================== 五、基础绘图工具 ======================*/
-
 void fillRect(HDC dc, int x, int y, int w, int h, COLORREF c)
 {
     RECT r;
@@ -61,8 +59,6 @@ COLORREF suitColor(int suit)
     return (suit == 1 || suit == 2) ? COL_REDC : COL_BLACK;
 }
 
-/*====================== 六、有理数运算 ======================*/
-
 static long long gcdLL(long long a, long long b)
 {
     if (a < 0) a = -a;
@@ -110,8 +106,6 @@ Fraction divFraction(Fraction a, Fraction b)
 }
 
 bool isTwentyFour(Fraction f) { return f.den == 1 && f.num == 24; }
-
-/*====================== 七、24 点求解器 ======================*/
 
 /*
  * 递归地把两个数合并成一个数，穷尽所有组合。
@@ -217,8 +211,6 @@ void generateCards(int cards[CARD_COUNT], int suits[CARD_COUNT],
         if (solve24(cards, dummy, wantSolvable) == wantSolvable) return;
     }
 }
-
-/*====================== 八、表达式解析 ======================*/
 
 /* 全角符号到半角符号的映射（GBK 两字节串） */
 struct WideCharMap {
@@ -422,8 +414,6 @@ bool sameNumberSet(const char *expr, const int cards[CARD_COUNT])
     }
     return true;
 }
-
-/*====================== 九、计分与排行榜 ======================*/
 
 int calculateScore(const Difficulty &diff, int remainSec)
 {

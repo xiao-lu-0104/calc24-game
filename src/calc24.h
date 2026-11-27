@@ -21,7 +21,6 @@
 
 using std::string;
 
-/*====================== 一、全局常量 ======================*/
 static const int  DES_W        = 1280;         /* 设计画布宽（逻辑单位）     */
 static const int  DES_H        = 800;          /* 设计画布高                 */
 static const int  CARD_COUNT   = 4;            /* 每题牌数                   */
@@ -89,7 +88,6 @@ enum { GS_INPUT = 0, GS_RESULT };
 /* 本题判定结果 */
 enum { RES_RIGHT = 0, RES_WRONG, RES_TIMEOUT, RES_NOANS_OK, RES_NOANS_BAD };
 
-/*====================== 二、终端主题配色 ======================*/
 /* 卡面与控件用色：米白底色、深色文字和品红强调色 */
 
 static const COLORREF P_PAPER   = RGB(245, 243, 238);   /* 终端纸面         */
@@ -109,7 +107,6 @@ static const COLORREF COL_TEXT  = RGB(226, 230, 235);
 static const COLORREF COL_BLACK = RGB( 30,  30,  34);
 static const COLORREF COL_REDC  = RGB(190,  40,  50);
 
-/*====================== 三、字体与句柄 ======================*/
 extern HFONT     F_HERO;   /* 大标题 40（中文）                    */
 extern HFONT     F_H1;   /* 卡片标题 32                          */
 extern HFONT     F_H2;   /* 小标题 26                            */
@@ -146,8 +143,6 @@ extern int       g_pressSlot;   /* 按下按钮在列表中的下标               */
 extern bool      g_nameFromMenu;   /* 姓名界面是“档案改名”而非开局     */
 
 /* 逻辑单位 -> 设备像素（仅用于初始窗口尺寸、截图等场合） */
-
-/*====================== 四、数据结构 ======================*/
 
 /* 有理数：分子、分母均为 long long，每次运算后约分，彻底避免浮点误差 */
 struct Fraction {
@@ -227,8 +222,6 @@ struct GameState {
 extern GameState g;
 
 
-/*====================== 跨模块使用的数据类型 ======================*/
-
 struct BtnDesc {
     int         x, y, w, h;
     int         id;
@@ -236,15 +229,9 @@ struct BtnDesc {
     const char *text;
 };
 
-/*====================== 缩放工具（定义在 app.cpp） ======================*/
-
 int sc(int v);                   /* 逻辑单位 -> 设备像素            */
 double viewScale(int cw, int ch);/* 按客户区尺寸算等比缩放系数     */
 
-/*====================== 跨模块全局变量 ======================*/
-
-
-/*====================== 跨模块函数 ======================*/
 
 extern bool g_sfxOn;                    /* 音效总开关（定义在 audio.cpp）  */
 const char *appDir();                   /* exe 所在目录（含尾部反斜杠）    */

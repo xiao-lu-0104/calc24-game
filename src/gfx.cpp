@@ -4,8 +4,6 @@
 
 #include "calc24.h"
 
-/*====================== 十、界面基础绘制 ======================*/
-
 /* 颜色在第二节定义：P_ 开头为浅色卡面主题 */
 
 void hline(HDC dc, int x, int y, int w, COLORREF c, int t)
@@ -66,7 +64,6 @@ void cutBorder(HDC dc, int x, int y, int w, int h, int cut,
     polyOutline(dc, p, 9, c, t);
 }
 
-/* 有投影的浅色卡片 */
 void paperCard(HDC dc, int x, int y, int w, int h, int cut,
                       COLORREF fill, COLORREF border, int t, bool shadow)
 {
@@ -246,7 +243,6 @@ void drawIcon(HDC dc, int kind, int cx, int cy, int s, COLORREF c)
     DeleteObject(pn);
 }
 
-/* 粉色 “24” 放射徽记 */
 void emblem(HDC dc, int cx, int cy, int r, COLORREF col, COLORREF dark)
 {
     HPEN pn = CreatePen(PS_SOLID, (r >= 40) ? 3 : 2, col);
@@ -279,8 +275,6 @@ void emblem(HDC dc, int cx, int cy, int r, COLORREF col, COLORREF dark)
     }
 }
 
-
-/*====================== 十一、背景与页脚 ======================*/
 
 static COLORREF mixColor(COLORREF a, COLORREF b, double t)
 {
